@@ -1,0 +1,389 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum WorkspaceType {
+  PERSONAL
+  TEAM
+  BUSINESS
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum HabitFrequency {
+  DAILY
+  WEEKLY
+  CUSTOM
+}
+
+model User {
+  id                String                   @id @default(cuid())
+  email             String                   @unique @db.VarChar(191)
+  passwordHash      String?                  @map("password_hash") @db.VarChar(255)
+  googleId          String?                  @unique @map("google_id") @db.VarChar(191)
+  name              String                   @db.VarChar(191)
+  avatarUrl         String?                  @map("avatar_url") @db.VarChar(500)
+  emailVerified     Boolean                  @default(false) @map("email_verified")
+  twoFactorEnabled  Boolean                  @default(false) @map("two_factor_enabled")
+  twoFactorSecret   String?                  @map("two_factor_secret") @db.VarChar(191)
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  updatedAt         DateTime                 @updatedAt @map("updated_at")
+  lastLogin         DateTime?                @map("last_login")
+  deletedAt         DateTime?                @map("deleted_at")
+
+  ownedWorkspaces    Workspace[]              @relation("WorkspaceOwner")
+  memberships        WorkspaceMember[]
+  createdTasks       Task[]                   @relation("TaskCreator")
+  assignedTasks      Task[]                   @relation("TaskAssignee")
+  habits             Habit[]
+  habitLogs          HabitLog[]
+  goals              Goal[]
+  focusSessions      FocusSession[]
+  progressCore       ProgressCore?
+  comments           Comment[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  sessions           UserSession[]
+  refreshTokens      RefreshToken[]
+  emailVerifications EmailVerificationToken[]
+  passwordResets     PasswordResetToken[]
+  backupCodes        TwoFactorBackupCode[]
+
+  @@index([email, deletedAt])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model Workspace {
+  id         String        @id @default(cuid())
+  name       String        @db.VarChar(191)
+  type       WorkspaceType
+  ownerId    String        @map("owner_id")
+  settings   Json?
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+  deletedAt  DateTime?     @map("deleted_at")
+
+  owner         User              @relation("WorkspaceOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members       WorkspaceMember[]
+  tasks         Task[]
+  habits        Habit[]
+  goals         Goal[]
+  focusSessions FocusSession[]
+  auditLogs     AuditLog[]
+
+  @@index([ownerId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  workspaceId String        @map("workspace_id")
+  userId      String        @map("user_id")
+  role        WorkspaceRole @default(MEMBER)
+  joinedAt    DateTime      @default(now()) @map("joined_at")
+  permissions Json?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId, role])
+  @@map("workspace_members")
+}
+
+model Task {
+  id            String       @id @default(cuid())
+  workspaceId   String       @map("workspace_id")
+  creatorId     String       @map("creator_id")
+  assigneeId    String?      @map("assignee_id")
+  title         String       @db.VarChar(255)
+  description   String?      @db.Text
+  status        TaskStatus   @default(TODO)
+  priority      TaskPriority @default(MEDIUM)
+  dueDate       DateTime?    @map("due_date")
+  dueTime       String?      @map("due_time") @db.VarChar(8)
+  completedAt   DateTime?    @map("completed_at")
+  colorTag      String?      @map("color_tag") @db.VarChar(32)
+  parentTaskId  String?      @map("parent_task_id")
+  position      Int          @default(0)
+  recurringRule Json?        @map("recurring_rule")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  deletedAt     DateTime?    @map("deleted_at")
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator       User           @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  assignee      User?          @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  parentTask    Task?          @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks      Task[]         @relation("TaskSubtasks")
+  comments      Comment[]
+  focusSessions FocusSession[]
+
+  @@index([workspaceId, status, priority])
+  @@index([assigneeId, dueDate])
+  @@index([parentTaskId])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("tasks")
+}
+
+model Habit {
+  id                String         @id @default(cuid())
+  userId            String         @map("user_id")
+  workspaceId       String         @map("workspace_id")
+  name              String         @db.VarChar(191)
+  description       String?        @db.Text
+  color             String         @db.VarChar(32)
+  frequency         HabitFrequency
+  targetCount       Int            @default(1) @map("target_count")
+  streakCurrent     Int            @default(0) @map("streak_current")
+  streakBest        Int            @default(0) @map("streak_best")
+  lastCompletedDate DateTime?      @map("last_completed_date")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  deletedAt         DateTime?      @map("deleted_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  logs      HabitLog[]
+
+  @@index([userId, workspaceId])
+  @@index([deletedAt])
+  @@map("habits")
+}
+
+model HabitLog {
+  id            String   @id @default(cuid())
+  habitId       String   @map("habit_id")
+  userId        String   @map("user_id")
+  completedDate DateTime @map("completed_date")
+  count         Int      @default(1)
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, completedDate])
+  @@index([userId, completedDate])
+  @@map("habit_logs")
+}
+
+model Goal {
+  id                 String    @id @default(cuid())
+  userId             String    @map("user_id")
+  workspaceId        String    @map("workspace_id")
+  title              String    @db.VarChar(191)
+  description        String?   @db.Text
+  targetMetric       String    @map("target_metric") @db.VarChar(191)
+  currentValue       Float     @default(0) @map("current_value")
+  targetValue        Float     @map("target_value")
+  deadline           DateTime?
+  progressPercentage Float     @default(0) @map("progress_percentage")
+  color              String    @db.VarChar(32)
+  icon               String?   @db.VarChar(64)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspaceId, deadline])
+  @@index([deletedAt])
+  @@map("goals")
+}
+
+model FocusSession {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  workspaceId     String    @map("workspace_id")
+  taskId          String?   @map("task_id")
+  durationMinutes Int       @map("duration_minutes")
+  startedAt       DateTime  @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  interruptions   Int       @default(0)
+  notes           String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task      Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startedAt])
+  @@index([workspaceId, createdAt])
+  @@map("focus_sessions")
+}
+
+model ProgressCore {
+  id                         String   @id @default(cuid())
+  userId                     String   @unique @map("user_id")
+  level                      Int      @default(1)
+  experiencePoints           Int      @default(0) @map("experience_points")
+  weeklyCompletionPercentage Float    @default(0) @map("weekly_completion_percentage")
+  consistencyScore           Float    @default(0) @map("consistency_score")
+  totalTasksCompleted        Int      @default(0) @map("total_tasks_completed")
+  totalStreakDays            Int      @default(0) @map("total_streak_days")
+  unlockedFeatures           Json?    @map("unlocked_features")
+  lastCalculatedAt           DateTime @default(now()) @map("last_calculated_at")
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([level, experiencePoints])
+  @@map("progress_core")
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  taskId    String    @map("task_id")
+  userId    String    @map("user_id")
+  content   String    @db.Text
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([deletedAt])
+  @@map("comments")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  type      String   @db.VarChar(64)
+  title     String   @db.VarChar(191)
+  message   String   @db.Text
+  read      Boolean  @default(false)
+  link      String?  @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  userId      String   @map("user_id")
+  action      String   @db.VarChar(64)
+  entityType  String   @map("entity_type") @db.VarChar(64)
+  entityId    String   @map("entity_id") @db.VarChar(191)
+  changes     Json?
+  ipAddress   String?  @map("ip_address") @db.VarChar(64)
+  userAgent   String?  @map("user_agent") @db.VarChar(512)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt])
+  @@index([userId, action, createdAt])
+  @@map("audit_logs")
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  refreshToken String   @unique @map("refresh_token") @db.VarChar(255)
+  userAgent    String?  @map("user_agent") @db.VarChar(512)
+  ipAddress    String?  @map("ip_address") @db.VarChar(64)
+  lastSeenAt   DateTime @default(now()) @map("last_seen_at")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("user_sessions")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([revokedAt])
+  @@map("refresh_tokens")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model TwoFactorBackupCode {
+  id       String    @id @default(cuid())
+  userId   String    @map("user_id")
+  codeHash String    @map("code_hash") @db.VarChar(255)
+  usedAt   DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+  @@map("two_factor_backup_codes")
+}

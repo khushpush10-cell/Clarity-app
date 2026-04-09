@@ -1,0 +1,20 @@
+openapi: 3.0.3
+info:
+  title: Clarity API
+  version: 0.1.0
+  description: Baseline API contract for Clarity task manager and routines platform.
+servers:
+  - url: /api
+paths:
+  /auth/login:
+    post:
+      summary: User login
+      responses:
+        '200':
+          description: Login success
+  /tasks:
+    get:
+      summary: List tasks
+      responses:
+        '200':
+          description: Task list response
