@@ -3,12 +3,6 @@
 	"buildCommand": "npm run build",
 	"devCommand": "npm run dev",
 	"installCommand": "npm install",
-	"functions": {
-		"src/routes/api/**/*.ts": {
-			"memory": 512,
-			"maxDuration": 10
-		}
-	},
 	"crons": [
 		{
 			"path": "/api/cron/backup",
