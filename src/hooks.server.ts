@@ -5,6 +5,7 @@ import { redirect, type Handle } from '@sveltejs/kit';
 
 import { ACCESS_COOKIE } from '$lib/server/auth/constants';
 import { verifyAccessToken } from '$lib/server/auth/jwt';
+import { rotateSession } from '$lib/server/auth/service';
 import { prisma } from '$lib/server/prisma';
 import { ensurePersonalWorkspace } from '$lib/server/workspace';
 
@@ -121,6 +122,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 						avatarUrl: user.avatarUrl
 					};
 				}
+			}
+		} else {
+			const rotated = await rotateSession(event);
+			if (rotated) {
+				event.locals.user = rotated;
 			}
 		}
 	}
