@@ -10,7 +10,13 @@ const envSchema = z.object({
 	GOOGLE_CLIENT_SECRET: z.string().min(1, 'GOOGLE_CLIENT_SECRET is required'),
 	NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 	VERCEL_URL: z.string().optional(),
-	SESSION_COOKIE_NAME: z.string().min(1, 'SESSION_COOKIE_NAME is required')
+	SESSION_COOKIE_NAME: z.string().min(1, 'SESSION_COOKIE_NAME is required'),
+	AUTH_BYPASS: z.string().optional(),
+	RESEND_API_KEY: z.string().optional(),
+	EMAIL_FROM: z.string().optional(),
+	APP_BASE_URL: z.string().url().optional(),
+	REQUIRE_EMAIL_VERIFICATION: z.string().optional(),
+	CRON_SECRET: z.string().optional()
 });
 
 const parsed = envSchema.safeParse(process.env);

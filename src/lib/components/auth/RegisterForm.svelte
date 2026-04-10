@@ -9,6 +9,7 @@
 	let password = $state('');
 	let isSubmitting = $state(false);
 	let error = $state('');
+	let notice = $state('');
 
 	async function onSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -27,7 +28,8 @@
 				return;
 			}
 
-			await goto('/dashboard');
+			notice = 'Check your email for a verification link.';
+			await goto('/auth/login');
 		} catch {
 			error = 'Unable to register right now. Please check database connection and try again.';
 		} finally {
@@ -74,6 +76,11 @@
 		{#if error}
 			<p class="rounded-[8px] border border-urgent/40 bg-urgent/10 px-3 py-2 text-sm text-urgent">
 				{error}
+			</p>
+		{/if}
+		{#if notice}
+			<p class="rounded-[8px] border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
+				{notice}
 			</p>
 		{/if}
 

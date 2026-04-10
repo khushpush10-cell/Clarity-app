@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "prisma db push && vite build",
+		"build": "prisma db push && svelte-kit build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -53,6 +53,7 @@
 		"jose": "^6.2.2",
 		"otplib": "^13.4.0",
 		"qrcode": "^1.5.4",
+		"resend": "^4.2.0",
 		"speakeasy": "^2.0.0",
 		"zod": "^4.3.6"
 	}

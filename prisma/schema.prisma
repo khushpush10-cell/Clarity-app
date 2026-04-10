@@ -65,6 +65,7 @@ model User {
   focusSessions      FocusSession[]
   progressCore       ProgressCore?
   comments           Comment[]
+  attachments        TaskAttachment[]
   notifications      Notification[]
   auditLogs          AuditLog[]
   sessions           UserSession[]
@@ -145,6 +146,7 @@ model Task {
   parentTask    Task?          @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
   subtasks      Task[]         @relation("TaskSubtasks")
   comments      Comment[]
+  attachments   TaskAttachment[]
   focusSessions FocusSession[]
 
   @@index([workspaceId, status, priority])
@@ -153,6 +155,24 @@ model Task {
   @@index([deletedAt])
   @@index([createdAt])
   @@map("tasks")
+}
+
+model TaskAttachment {
+  id         String   @id @default(cuid())
+  taskId     String   @map("task_id")
+  uploaderId String   @map("uploader_id")
+  name       String   @db.VarChar(255)
+  url        String   @db.VarChar(1000)
+  mimeType   String?  @map("mime_type") @db.VarChar(128)
+  size       Int?     @map("size_bytes")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploader User @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([uploaderId])
+  @@map("task_attachments")
 }
 
 model Habit {

@@ -7,6 +7,8 @@ import { hashPassword } from '$lib/server/auth/password';
 import { registerSchema } from '$lib/server/auth/schemas';
 import { issueSession } from '$lib/server/auth/service';
 import { createRandomToken, hashToken } from '$lib/server/auth/tokens';
+import { resolveAppBaseUrl, sendEmail } from '$lib/server/email';
+import { env } from '$lib/server/env';
 import { prisma } from '$lib/server/prisma';
 import { checkRateLimit } from '$lib/server/security/rateLimit';
 
@@ -82,16 +84,33 @@ export const POST: RequestHandler = async (event) => {
 			}
 		});
 
-		await issueSession(event, user);
+		const baseUrl = resolveAppBaseUrl(event.url.origin);
+		const verificationUrl = `${baseUrl}/auth/verify?token=${verificationToken}`;
+		await sendEmail({
+			to: user.email,
+			subject: 'Verify your Clarity account',
+			text: `Verify your email address: ${verificationUrl}`,
+			html: `<p>Verify your email to activate your Clarity account:</p><p><a href="${verificationUrl}">${verificationUrl}</a></p>`
+		});
+
+		if (env.REQUIRE_EMAIL_VERIFICATION !== '1') {
+			await issueSession(event, user);
+		}
 
 		return json(
 			{
 				user,
-				verificationToken
+				verificationSent: true
 			},
 			{ status: 201 }
 		);
 	} catch (error) {
+		if (error instanceof Error && error.message.includes('RESEND_API_KEY')) {
+			return json({ error: 'Email service not configured' }, { status: 500 });
+		}
+		if (error instanceof Error && error.message.includes('EMAIL_FROM')) {
+			return json({ error: 'Email sender not configured' }, { status: 500 });
+		}
 		if (isPrismaConnectionError(error)) {
 			return json(
 				{

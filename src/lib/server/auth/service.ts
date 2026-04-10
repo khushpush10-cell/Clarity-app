@@ -73,6 +73,17 @@ export async function rotateSession(
 	return user;
 }
 
+export async function touchSession(event: RequestEvent): Promise<void> {
+	const refreshToken = event.cookies.get(REFRESH_COOKIE);
+	if (!refreshToken) return;
+
+	const tokenHash = hashToken(refreshToken);
+	await prisma.userSession.updateMany({
+		where: { refreshToken: tokenHash },
+		data: { lastSeenAt: new Date() }
+	});
+}
+
 export async function revokeCurrentSession(event: RequestEvent): Promise<void> {
 	const refreshToken = event.cookies.get(REFRESH_COOKIE);
 	if (refreshToken) {

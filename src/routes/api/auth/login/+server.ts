@@ -6,7 +6,9 @@ import type { RequestHandler } from './$types';
 import { loginSchema } from '$lib/server/auth/schemas';
 import { issueSession, verifyTotp } from '$lib/server/auth/service';
 import { verifyPassword } from '$lib/server/auth/password';
-import { hashToken } from '$lib/server/auth/tokens';
+import { createRandomToken, hashToken } from '$lib/server/auth/tokens';
+import { resolveAppBaseUrl, sendEmail } from '$lib/server/email';
+import { env } from '$lib/server/env';
 import { prisma } from '$lib/server/prisma';
 import { checkRateLimit } from '$lib/server/security/rateLimit';
 
@@ -47,6 +49,31 @@ export const POST: RequestHandler = async (event) => {
 			return json({ error: 'Invalid credentials' }, { status: 401 });
 		}
 
+		if (env.REQUIRE_EMAIL_VERIFICATION === '1' && !user.emailVerified) {
+			const token = createRandomToken();
+			await prisma.emailVerificationToken.create({
+				data: {
+					userId: user.id,
+					tokenHash: hashToken(token),
+					expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+				}
+			});
+
+			const baseUrl = resolveAppBaseUrl(event.url.origin);
+			const verificationUrl = `${baseUrl}/auth/verify?token=${token}`;
+			await sendEmail({
+				to: user.email,
+				subject: 'Verify your Clarity account',
+				text: `Verify your email address: ${verificationUrl}`,
+				html: `<p>Verify your email to continue:</p><p><a href="${verificationUrl}">${verificationUrl}</a></p>`
+			});
+
+			return json(
+				{ error: 'Email not verified. Verification email sent.' },
+				{ status: 403 }
+			);
+		}
+
 		if (user.twoFactorEnabled) {
 			const code = payload.data.totpCode;
 			const backupCode = payload.data.backupCode;
@@ -83,6 +110,12 @@ export const POST: RequestHandler = async (event) => {
 
 		return json({ user: authUser });
 	} catch (error) {
+		if (error instanceof Error && error.message.includes('RESEND_API_KEY')) {
+			return json({ error: 'Email service not configured' }, { status: 500 });
+		}
+		if (error instanceof Error && error.message.includes('EMAIL_FROM')) {
+			return json({ error: 'Email sender not configured' }, { status: 500 });
+		}
 		if (isPrismaConnectionError(error)) {
 			return json(
 				{

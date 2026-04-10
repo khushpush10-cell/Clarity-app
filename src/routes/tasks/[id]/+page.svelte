@@ -25,9 +25,12 @@
 		[] as Array<{ id: string; action: string; createdAt: string; user: { name: string; avatarUrl: string | null } }>
 	);
 	let newComment = $state('');
+	let attachments = $state([] as Array<{ id: string; name: string; url: string; createdAt: string }>);
+	let attachmentName = $state('');
+	let attachmentUrl = $state('');
 
 	onMount(async () => {
-		await Promise.all([loadTask(), loadActivity()]);
+		await Promise.all([loadTask(), loadActivity(), loadAttachments()]);
 	});
 
 	async function loadTask() {
@@ -70,6 +73,14 @@
 		activity = result.data?.audit ?? [];
 	}
 
+	async function loadAttachments() {
+		const result = await apiRequest<{ items?: typeof attachments; error?: string }>(
+			`/api/tasks/${params.id}/attachments`
+		);
+		if (!result.ok) return;
+		attachments = result.data?.items ?? [];
+	}
+
 	async function submitComment(event: SubmitEvent) {
 		event.preventDefault();
 		const content = newComment.trim();
@@ -87,6 +98,27 @@
 
 		newComment = '';
 		await loadActivity();
+	}
+
+	async function submitAttachment(event: SubmitEvent) {
+		event.preventDefault();
+		const name = attachmentName.trim();
+		const url = attachmentUrl.trim();
+		if (!name || !url) return;
+
+		const result = await apiRequest<{ item?: unknown; error?: string }>(`/api/tasks/${params.id}/attachments`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ name, url })
+		});
+		if (!result.ok) {
+			error = result.error ?? 'Unable to add attachment';
+			return;
+		}
+
+		attachmentName = '';
+		attachmentUrl = '';
+		await loadAttachments();
 	}
 </script>
 
@@ -130,19 +162,42 @@
 				</div>
 			</section>
 
-			<section class="col-span-5 rounded-[8px] border border-border bg-surface p-4">
-				<h2 class="text-sm font-semibold text-text-primary">Activity History</h2>
-				<div class="mt-3 space-y-2">
-					{#if activity.length === 0}
-						<p class="text-sm text-text-secondary">No activity yet.</p>
-					{:else}
-						{#each activity as event (event.id)}
-							<div class="rounded-[8px] border border-border bg-background p-3">
-								<p class="text-sm font-medium text-text-primary">{event.action}</p>
-								<p class="mt-1 text-xs text-text-secondary">{event.user.name} - {new Date(event.createdAt).toLocaleString()}</p>
-							</div>
-						{/each}
-					{/if}
+			<section class="col-span-5 space-y-4">
+				<div class="rounded-[8px] border border-border bg-surface p-4">
+					<h2 class="text-sm font-semibold text-text-primary">Attachments</h2>
+					<form class="mt-3 space-y-2" onsubmit={submitAttachment}>
+						<input bind:value={attachmentName} class="w-full rounded-[8px] border border-border px-3 py-2 text-sm" placeholder="File name" type="text" />
+						<input bind:value={attachmentUrl} class="w-full rounded-[8px] border border-border px-3 py-2 text-sm" placeholder="File URL" type="url" />
+						<button class="rounded-[8px] bg-secondary px-3 py-2 text-xs font-semibold text-white" type="submit">Add attachment</button>
+					</form>
+					<div class="mt-3 space-y-2">
+						{#if attachments.length === 0}
+							<p class="text-sm text-text-secondary">No attachments yet.</p>
+						{:else}
+							{#each attachments as attachment (attachment.id)}
+								<div class="rounded-[8px] border border-border bg-background p-3">
+									<p class="text-sm font-medium text-text-primary">{attachment.name}</p>
+									<a class="text-xs text-secondary" href={attachment.url} target="_blank" rel="noreferrer">{attachment.url}</a>
+								</div>
+							{/each}
+						{/if}
+					</div>
+				</div>
+
+				<div class="rounded-[8px] border border-border bg-surface p-4">
+					<h2 class="text-sm font-semibold text-text-primary">Activity History</h2>
+					<div class="mt-3 space-y-2">
+						{#if activity.length === 0}
+							<p class="text-sm text-text-secondary">No activity yet.</p>
+						{:else}
+							{#each activity as event (event.id)}
+								<div class="rounded-[8px] border border-border bg-background p-3">
+									<p class="text-sm font-medium text-text-primary">{event.action}</p>
+									<p class="mt-1 text-xs text-text-secondary">{event.user.name} - {new Date(event.createdAt).toLocaleString()}</p>
+								</div>
+							{/each}
+						{/if}
+					</div>
 				</div>
 			</section>
 		</div>

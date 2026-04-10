@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 
-	import GoogleButton from '$lib/components/auth/GoogleButton.svelte';
+import GoogleButton from '$lib/components/auth/GoogleButton.svelte';
+import { apiRequest } from '$lib/utils/http';
 
 	let email = $state('');
 	let password = $state('');
@@ -16,7 +17,7 @@
 		isSubmitting = true;
 
 		try {
-			const response = await fetch('/api/auth/login', {
+			const result = await apiRequest<{ error?: string }>('/api/auth/login', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({
@@ -26,14 +27,8 @@
 					backupCode: backupCode || undefined
 				})
 			});
-
-			const contentType = response.headers.get('content-type') ?? '';
-			const payload = contentType.includes('application/json')
-				? await response.json()
-				: { error: `Request failed (${response.status})` };
-
-			if (!response.ok) {
-				error = payload.error ?? 'Login failed';
+			if (!result.ok) {
+				error = result.error ?? 'Login failed';
 				return;
 			}
 
@@ -113,6 +108,9 @@
 	<GoogleButton />
 
 	<p class="mt-6 text-sm text-text-secondary">
+		<a class="font-semibold text-secondary" href="/auth/forgot">Forgot password?</a>
+	</p>
+	<p class="mt-2 text-sm text-text-secondary">
 		No account? <a class="font-semibold text-secondary" href="/auth/register">Create one</a>
 	</p>
 </section>
