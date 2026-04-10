@@ -13,6 +13,10 @@ export const load: PageServerLoad = async ({ locals, url, cookies, request }) =>
 		throw redirect(302, '/dashboard');
 	}
 
+	if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+		throw error(503, 'Google OAuth is not configured.');
+	}
+
 	const code = url.searchParams.get('code');
 	const state = url.searchParams.get('state');
 	const expectedState = cookies.get('google_oauth_state');

@@ -5,6 +5,7 @@ import type { RequestHandler } from './$types';
 import { forgotPasswordSchema } from '$lib/server/auth/schemas';
 import { createRandomToken, hashToken } from '$lib/server/auth/tokens';
 import { resolveAppBaseUrl, sendEmail } from '$lib/server/email';
+import { env } from '$lib/server/env';
 import { prisma } from '$lib/server/prisma';
 import { checkRateLimit } from '$lib/server/security/rateLimit';
 
@@ -12,6 +13,17 @@ export const POST: RequestHandler = async (event) => {
 	const ip = event.getClientAddress?.() ?? 'unknown';
 	if (!checkRateLimit(`forgot:${ip}`, 10, 60 * 60 * 1000)) {
 		return json({ error: 'Too many requests' }, { status: 429 });
+	}
+
+	const emailConfigured = Boolean(env.RESEND_API_KEY && env.EMAIL_FROM);
+	if (!emailConfigured) {
+		return json(
+			{
+				error:
+					'Email delivery is not configured. Set RESEND_API_KEY and EMAIL_FROM to enable password resets.'
+			},
+			{ status: 500 }
+		);
 	}
 
 	try {

@@ -25,6 +25,18 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'Too many requests' }, { status: 429 });
 	}
 
+	const emailConfigured = Boolean(env.RESEND_API_KEY && env.EMAIL_FROM);
+
+	if (env.REQUIRE_EMAIL_VERIFICATION === '1' && !emailConfigured) {
+		return json(
+			{
+				error:
+					'Email verification is required, but email delivery is not configured. Set RESEND_API_KEY and EMAIL_FROM.'
+			},
+			{ status: 500 }
+		);
+	}
+
 	try {
 		const payload = registerSchema.safeParse(await event.request.json());
 		if (!payload.success) {
@@ -75,23 +87,27 @@ export const POST: RequestHandler = async (event) => {
 			return createdUser;
 		});
 
-		const verificationToken = createRandomToken();
-		await prisma.emailVerificationToken.create({
-			data: {
-				userId: user.id,
-				tokenHash: hashToken(verificationToken),
-				expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
-			}
-		});
+		let verificationSent = false;
+		if (emailConfigured) {
+			const verificationToken = createRandomToken();
+			await prisma.emailVerificationToken.create({
+				data: {
+					userId: user.id,
+					tokenHash: hashToken(verificationToken),
+					expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+				}
+			});
 
-		const baseUrl = resolveAppBaseUrl(event.url.origin);
-		const verificationUrl = `${baseUrl}/auth/verify?token=${verificationToken}`;
-		await sendEmail({
-			to: user.email,
-			subject: 'Verify your Clarity account',
-			text: `Verify your email address: ${verificationUrl}`,
-			html: `<p>Verify your email to activate your Clarity account:</p><p><a href="${verificationUrl}">${verificationUrl}</a></p>`
-		});
+			const baseUrl = resolveAppBaseUrl(event.url.origin);
+			const verificationUrl = `${baseUrl}/auth/verify?token=${verificationToken}`;
+			await sendEmail({
+				to: user.email,
+				subject: 'Verify your Clarity account',
+				text: `Verify your email address: ${verificationUrl}`,
+				html: `<p>Verify your email to activate your Clarity account:</p><p><a href="${verificationUrl}">${verificationUrl}</a></p>`
+			});
+			verificationSent = true;
+		}
 
 		if (env.REQUIRE_EMAIL_VERIFICATION !== '1') {
 			await issueSession(event, user);
@@ -100,7 +116,7 @@ export const POST: RequestHandler = async (event) => {
 		return json(
 			{
 				user,
-				verificationSent: true
+				verificationSent
 			},
 			{ status: 201 }
 		);

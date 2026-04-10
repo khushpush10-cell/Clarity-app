@@ -25,6 +25,8 @@ export const POST: RequestHandler = async (event) => {
 		return json({ error: 'Too many login attempts' }, { status: 429 });
 	}
 
+	const emailConfigured = Boolean(env.RESEND_API_KEY && env.EMAIL_FROM);
+
 	try {
 		const payload = loginSchema.safeParse(await event.request.json());
 		if (!payload.success) {
@@ -50,6 +52,16 @@ export const POST: RequestHandler = async (event) => {
 		}
 
 		if (env.REQUIRE_EMAIL_VERIFICATION === '1' && !user.emailVerified) {
+			if (!emailConfigured) {
+				return json(
+					{
+						error:
+							'Email verification is required, but email delivery is not configured. Set RESEND_API_KEY and EMAIL_FROM.'
+					},
+					{ status: 500 }
+				);
+			}
+
 			const token = createRandomToken();
 			await prisma.emailVerificationToken.create({
 				data: {

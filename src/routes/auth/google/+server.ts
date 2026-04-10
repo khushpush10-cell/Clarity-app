@@ -1,4 +1,4 @@
-import { redirect } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 
 import type { RequestHandler } from './$types';
 
@@ -6,6 +6,10 @@ import { env } from '$lib/server/env';
 import { resolveAppBaseUrl } from '$lib/server/email';
 
 export const GET: RequestHandler = async ({ cookies, url }) => {
+	if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
+		throw error(503, 'Google OAuth is not configured.');
+	}
+
 	const state = crypto.randomUUID();
 	cookies.set('google_oauth_state', state, {
 		httpOnly: true,
