@@ -100,12 +100,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 				avatarUrl: user.avatarUrl
 			};
 		} catch {
-			event.locals.user = {
-				id: 'dev-bypass-user',
-				email: 'dev@clarity.local',
-				name: 'Dev Admin',
-				avatarUrl: null
-			};
+			if (event.url.pathname.startsWith('/api')) {
+				return new Response(JSON.stringify({ error: 'Database unavailable' }), {
+					status: 503,
+					headers: { 'content-type': 'application/json' }
+				});
+			}
+			throw redirect(302, '/maintenance');
 		}
 	} else {
 		const accessToken = event.cookies.get(ACCESS_COOKIE);
