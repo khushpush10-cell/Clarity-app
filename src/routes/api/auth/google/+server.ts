@@ -9,8 +9,6 @@ import { googleAuthSchema } from '$lib/server/auth/schemas';
 import { env } from '$lib/server/env';
 import { prisma } from '$lib/server/prisma';
 
-const client = new OAuth2Client(env.GOOGLE_CLIENT_ID);
-
 function isPrismaConnectionError(error: unknown): boolean {
 	return (
 		error instanceof Prisma.PrismaClientInitializationError ||
@@ -20,6 +18,12 @@ function isPrismaConnectionError(error: unknown): boolean {
 
 export const POST: RequestHandler = async (event) => {
 	try {
+		if (!env.GOOGLE_CLIENT_ID) {
+			return json({ error: 'Google OAuth is not configured' }, { status: 503 });
+		}
+
+		const client = new OAuth2Client(env.GOOGLE_CLIENT_ID);
+
 		const payload = googleAuthSchema.safeParse(await event.request.json());
 		if (!payload.success) {
 			return json({ error: 'Invalid input', issues: payload.error.issues }, { status: 400 });
