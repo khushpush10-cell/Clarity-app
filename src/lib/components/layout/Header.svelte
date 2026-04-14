@@ -5,7 +5,6 @@
 
 	import { apiRequest } from '$lib/utils/http';
 
-	let loggingOut = $state(false);
 	let query = $state('');
 	let unread = $state(0);
 	let notificationOpen = $state(false);
@@ -44,17 +43,6 @@
 		const value = query.trim();
 		if (!value) return;
 		await goto(`/tasks?search=${encodeURIComponent(value)}`);
-	}
-
-	async function onLogout() {
-		loggingOut = true;
-
-		try {
-			await apiRequest('/api/auth/logout', { method: 'POST' });
-			await goto('/auth/login');
-		} finally {
-			loggingOut = false;
-		}
 	}
 
 	function toggleTheme() {
@@ -127,13 +115,5 @@
 		</div>
 
 		<a class="rounded-[8px] border border-border px-3 py-1.5 text-text-primary" href="/settings">{page.data.user?.name ?? 'Guest'}</a>
-		<button
-			class="rounded-[8px] bg-urgent px-3 py-1.5 text-white hover:opacity-90 disabled:opacity-50"
-			disabled={loggingOut}
-			onclick={onLogout}
-			type="button"
-		>
-			{loggingOut ? 'Logging out...' : 'Logout'}
-		</button>
 	</div>
 </header>

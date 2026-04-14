@@ -7,21 +7,14 @@
 			Task manager and routines
 		</h1>
 		<p class="mt-6 max-w-2xl text-lg text-text-secondary">
-			Desktop-first workspace for tasks, habits, goals, and team operations. Start by creating an
-			account or signing in.
+			Desktop-first workspace for tasks, habits, goals, and team operations.
 		</p>
 		<div class="mt-10 flex gap-4">
 			<a
 				class="rounded-[8px] bg-primary px-6 py-3 text-sm font-semibold text-white transition hover:bg-[color-mix(in_srgb,var(--color-primary)_90%,white)]"
-				href="/auth/register"
+				href="/dashboard"
 			>
-				Create account
-			</a>
-			<a
-				class="rounded-[8px] border border-border bg-surface px-6 py-3 text-sm font-semibold text-text-primary transition hover:bg-[color-mix(in_srgb,var(--color-primary)_10%,white)]"
-				href="/auth/login"
-			>
-				Sign in
+				Open dashboard
 			</a>
 		</div>
 	</section>
