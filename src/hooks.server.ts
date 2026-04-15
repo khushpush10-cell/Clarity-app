@@ -61,7 +61,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.user = null;
 
 	const authDisabled = true;
-	const maintenance = env.MAINTENANCE_MODE === '1';
+	const maintenance = env.MAINTENANCE_MODE === '1' && !authDisabled;
 	if (
 		maintenance &&
 		event.url.pathname !== '/maintenance' &&
@@ -84,14 +84,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const authBypass = authDisabled || env.AUTH_BYPASS === '1';
 	if (authBypass) {
-		if (event.url.pathname === '/maintenance') {
-			event.locals.user = {
-				id: 'maintenance-user',
-				email: 'maintenance@clarity.local',
-				name: 'Maintenance',
-				avatarUrl: null
-			};
-		} else {
 		if (
 			event.url.pathname === '/' ||
 			event.url.pathname.startsWith('/auth')
@@ -114,17 +106,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 					headers: { 'content-type': 'application/json' }
 				});
 			}
-			if (event.url.pathname !== '/maintenance') {
-				throw redirect(302, '/maintenance');
-			}
-
 			event.locals.user = {
-				id: 'maintenance-user',
-				email: 'maintenance@clarity.local',
-				name: 'Maintenance',
+				id: 'dev-bypass-user',
+				email: 'dev@clarity.local',
+				name: 'Dev Admin',
 				avatarUrl: null
 			};
-		}
 		}
 	} else {
 		const accessToken = event.cookies.get(ACCESS_COOKIE);
