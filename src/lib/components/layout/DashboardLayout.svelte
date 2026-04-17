@@ -5,5 +5,5 @@
 </script>
 
 <MainLayout>
-	<div class="grid grid-cols-12 gap-6">{@render children()}</div>
+	<div class="grid grid-cols-1 gap-4 xl:grid-cols-12 xl:gap-6">{@render children()}</div>
 </MainLayout>

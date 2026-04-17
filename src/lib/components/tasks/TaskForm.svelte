@@ -16,63 +16,57 @@
 	let description = $state('');
 	let priority = $state<TaskPriorityUi>('MEDIUM');
 	let dueDate = $state('');
+	let recurrence = $state<'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY'>('NONE');
 
 	function onSubmit(event: SubmitEvent) {
 		event.preventDefault();
-
-		if (!title.trim()) {
-			return;
-		}
-
+		if (!title.trim()) return;
 		dispatch('create', {
 			title: title.trim(),
 			description: description.trim() || null,
 			priority,
 			dueDate: dueDate || null
 		});
-
 		title = '';
 		description = '';
 		priority = 'MEDIUM';
 		dueDate = '';
+		recurrence = 'NONE';
 	}
 </script>
 
-<form
-	class="grid grid-cols-12 gap-3 rounded-[8px] border border-border bg-surface p-4"
-	onsubmit={onSubmit}
->
-	<input
-		bind:value={title}
-		class="col-span-4 rounded-[8px] border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-		placeholder="Task title"
-		required
-		type="text"
-	/>
-	<input
-		bind:value={description}
-		class="col-span-4 rounded-[8px] border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-		placeholder="Description (optional)"
-		type="text"
-	/>
-	<select
-		bind:value={priority}
-		class="col-span-2 rounded-[8px] border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-	>
-		<option value="LOW">Low</option>
-		<option value="MEDIUM">Medium</option>
-		<option value="HIGH">High</option>
-		<option value="URGENT">Urgent</option>
-	</select>
-	<input
-		bind:value={dueDate}
-		class="col-span-1 rounded-[8px] border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-		type="date"
-	/>
-	<button
-		class="col-span-1 rounded-[8px] bg-primary px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
-		type="submit"
-	>
-		Add
-	</button>
+<form class="app-card grid grid-cols-1 gap-3 p-4 md:grid-cols-12" onsubmit={onSubmit}>
+	<div class="md:col-span-4">
+		<label class="mb-1 block text-xs font-medium text-text-secondary" for="task-title">Task title</label>
+		<input id="task-title" bind:value={title} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm" placeholder="Write a clear task" required type="text" />
+	</div>
+	<div class="md:col-span-4">
+		<label class="mb-1 block text-xs font-medium text-text-secondary" for="task-description">Notes</label>
+		<input id="task-description" bind:value={description} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm" placeholder="Optional details" type="text" />
+	</div>
+	<div class="md:col-span-2">
+		<label class="mb-1 block text-xs font-medium text-text-secondary" for="task-priority">Priority</label>
+		<select id="task-priority" bind:value={priority} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm">
+			<option value="LOW">Low</option>
+			<option value="MEDIUM">Medium</option>
+			<option value="HIGH">High</option>
+			<option value="URGENT">Urgent</option>
+		</select>
+	</div>
+	<div class="md:col-span-1">
+		<label class="mb-1 block text-xs font-medium text-text-secondary" for="task-due-date">Due date</label>
+		<input id="task-due-date" bind:value={dueDate} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm" type="date" />
+	</div>
+	<div class="md:col-span-1 md:self-end">
+		<button class="w-full rounded-[14px] bg-primary px-3 py-2 text-sm font-semibold text-on-primary" type="submit">Add</button>
+	</div>
+	<div class="md:col-span-12">
+		<label class="mb-1 block text-xs font-medium text-text-secondary" for="task-recur">Recurring</label>
+		<select id="task-recur" bind:value={recurrence} class="max-w-xs rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm">
+			<option value="NONE">No repeat</option>
+			<option value="DAILY">Daily</option>
+			<option value="WEEKLY">Weekly</option>
+			<option value="MONTHLY">Monthly</option>
+		</select>
+	</div>
 </form>

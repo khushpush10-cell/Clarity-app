@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 
 	import MainLayout from '$lib/components/layout/MainLayout.svelte';
+	import { notifications } from '$lib/stores/notifications';
 	import { apiRequest } from '$lib/utils/http';
 
 	let workspaces = $state([] as Array<{ id: string; name: string; type: string }>);
@@ -56,6 +57,12 @@
 			return;
 		}
 
+		notifications.push({
+			id: crypto.randomUUID(),
+			type: 'success',
+			title: 'Workspace saved',
+			message: 'Workspace settings updated.'
+		});
 		await loadWorkspaces();
 	}
 
@@ -72,6 +79,12 @@
 			return;
 		}
 
+		notifications.push({
+			id: crypto.randomUUID(),
+			type: 'info',
+			title: 'Workspace deleted',
+			message: 'Selected workspace has been removed.'
+		});
 		selectedWorkspaceId = null;
 		await loadWorkspaces();
 	}
@@ -79,57 +92,66 @@
 
 <MainLayout>
 	<section class="space-y-4">
-		<h1 class="text-2xl font-bold text-text-primary">Workspace Settings</h1>
+		<div>
+			<h1 class="text-[28px] font-semibold text-text-primary">Workspace Settings</h1>
+			<p class="text-sm text-text-secondary">Manage personal and team workspace identity.</p>
+		</div>
 
 		{#if error}
-			<p class="rounded-[8px] border border-urgent/40 bg-urgent/10 px-3 py-2 text-sm text-urgent">{error}</p>
+			<p class="rounded-[14px] border border-warning bg-warning-tint px-3 py-2 text-sm text-warning">{error}</p>
 		{/if}
 
-		<div class="grid grid-cols-12 gap-4">
-			<section class="col-span-4 rounded-[8px] border border-border bg-surface p-4">
-				<h2 class="text-sm font-semibold text-text-primary">Workspaces</h2>
+		<div class="grid grid-cols-1 gap-4 xl:grid-cols-12">
+			<section class="app-card p-4 xl:col-span-4">
+				<h2 class="text-xl font-semibold text-text-primary">Workspaces</h2>
+				<p class="mt-1 text-sm text-text-secondary">Select a workspace to edit.</p>
 				<div class="mt-3 space-y-2">
 					{#if workspaces.length === 0}
-						<p class="text-sm text-text-secondary">No workspaces available.</p>
+						<div class="empty-state">
+							<p class="text-sm">No workspaces available.</p>
+						</div>
 					{:else}
 						{#each workspaces as workspace (workspace.id)}
 							<button
-								class={`w-full rounded-[8px] border px-3 py-2 text-left text-sm ${
+								class={`w-full rounded-[12px] border px-3 py-2 text-left text-sm transition ${
 									selectedWorkspaceId === workspace.id
-										? 'border-primary bg-primary/10 text-primary'
-										: 'border-border bg-background text-text-primary'
+										? 'border-secondary bg-secondary-tint text-secondary'
+										: 'border-border bg-surface-2 text-text-primary hover:bg-surface'
 								}`}
 								onclick={() => (selectedWorkspaceId = workspace.id)}
 								type="button"
 							>
-								{workspace.name}
+								<p class="font-medium">{workspace.name}</p>
+								<p class="text-xs opacity-80">{workspace.type.toLowerCase()}</p>
 							</button>
 						{/each}
 					{/if}
 				</div>
 			</section>
 
-			<section class="col-span-8 rounded-[8px] border border-border bg-surface p-4">
-				<h2 class="text-sm font-semibold text-text-primary">Workspace Profile</h2>
+			<section class="app-card p-4 xl:col-span-8">
+				<h2 class="text-xl font-semibold text-text-primary">Workspace Profile</h2>
 				{#if !selectedWorkspaceId}
-					<p class="mt-3 text-sm text-text-secondary">Select a workspace first.</p>
+					<div class="empty-state mt-3">
+						<p class="text-sm">Choose a workspace from the left to edit details.</p>
+					</div>
 				{:else}
 					<form class="mt-3 space-y-3" onsubmit={saveWorkspace}>
 						<div>
-							<label class="mb-1 block text-xs text-text-secondary" for="workspace-name">Name</label>
-							<input id="workspace-name" bind:value={name} class="w-full rounded-[8px] border border-border px-3 py-2 text-sm" required type="text" />
+							<label class="mb-1 block text-[13px] font-medium text-text-secondary" for="workspace-name">Name</label>
+							<input id="workspace-name" bind:value={name} class="w-full rounded-[12px] border border-border bg-surface-2 px-3 py-2 text-sm" required type="text" />
 						</div>
 						<div>
-							<label class="mb-1 block text-xs text-text-secondary" for="workspace-type">Type</label>
-							<select id="workspace-type" bind:value={type} class="w-full rounded-[8px] border border-border px-3 py-2 text-sm">
+							<label class="mb-1 block text-[13px] font-medium text-text-secondary" for="workspace-type">Type</label>
+							<select id="workspace-type" bind:value={type} class="w-full rounded-[12px] border border-border bg-surface-2 px-3 py-2 text-sm">
 								{#each ['PERSONAL', 'TEAM', 'BUSINESS'] as option}
 									<option value={option}>{option}</option>
 								{/each}
 							</select>
 						</div>
-						<div class="flex gap-2">
-							<button class="rounded-[8px] bg-primary px-3 py-2 text-sm font-semibold text-white" type="submit">Save</button>
-							<button class="rounded-[8px] bg-urgent px-3 py-2 text-sm font-semibold text-white" onclick={deleteWorkspace} type="button">Delete</button>
+						<div class="flex flex-wrap gap-2">
+							<button class="rounded-[12px] bg-primary px-3 py-2 text-sm font-semibold text-on-primary transition hover:bg-primary-hover" type="submit">Save workspace</button>
+							<button class="rounded-[12px] bg-[color:var(--danger)] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[color:var(--danger-hover)]" onclick={deleteWorkspace} type="button">Delete workspace</button>
 						</div>
 					</form>
 				{/if}

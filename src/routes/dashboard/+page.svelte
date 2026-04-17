@@ -5,34 +5,42 @@
 </script>
 
 <DashboardLayout>
-	<section class="col-span-8 space-y-4">
-		<section class="rounded-[8px] border border-border bg-surface p-6">
-			<h1 class="text-2xl font-bold text-text-primary">Dashboard</h1>
-			<p class="mt-2 text-sm text-text-secondary">Core overview and productivity signals.</p>
+	<section class="space-y-4 xl:col-span-8">
+		<section class="app-card p-5 md:p-6">
+			<h1 class="text-3xl font-semibold text-text-primary">Dashboard</h1>
+			<p class="mt-2 text-sm text-text-secondary">A calm overview for planning your day with steady momentum.</p>
 
-			<div class="mt-6 grid grid-cols-3 gap-4">
-				<article class="rounded-[8px] border border-border bg-background p-4">
-					<p class="text-xs text-text-secondary">Today</p>
-					<p class="mt-1 text-lg font-semibold text-text-primary">Task Focus</p>
-					<p class="mt-2 text-sm text-text-secondary">Track and complete priority items.</p>
+			<div class="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+				<article class="muted-panel p-4">
+					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">Today plan</p>
+					<ul class="mt-2 space-y-1 text-sm text-text-primary">
+						<li>Top 3 tasks</li>
+						<li>1 key habit check</li>
+						<li>1 focus sprint</li>
+					</ul>
 				</article>
-				<article class="rounded-[8px] border border-border bg-background p-4">
-					<p class="text-xs text-text-secondary">Habits</p>
-					<p class="mt-1 text-lg font-semibold text-text-primary">Streak Momentum</p>
-					<p class="mt-2 text-sm text-text-secondary">Log habits to keep your core stable.</p>
+				<article class="muted-panel p-4">
+					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">Consistency</p>
+					<p class="mt-2 text-lg font-semibold text-text-primary">Build small wins daily</p>
+					<p class="mt-1 text-sm text-text-secondary">Sage progress indicates healthy routines.</p>
 				</article>
-				<article class="rounded-[8px] border border-border bg-background p-4">
-					<p class="text-xs text-text-secondary">Focus</p>
-					<p class="mt-1 text-lg font-semibold text-text-primary">Session Energy</p>
-					<p class="mt-2 text-sm text-text-secondary">Focus sessions boost consistency score.</p>
+				<article class="muted-panel p-4">
+					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">Quick add</p>
+					<div class="mt-2 flex flex-wrap gap-2">
+						<a class="rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-on-primary" href="/tasks">Task</a>
+						<a class="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-text-primary" href="/habits">Habit</a>
+						<a class="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-text-primary" href="/dashboard#focus">Focus</a>
+					</div>
 				</article>
 			</div>
 		</section>
 
-		<FocusTimer />
+		<div id="focus">
+			<FocusTimer />
+		</div>
 	</section>
 
-	<section class="col-span-4">
+	<section class="xl:col-span-4">
 		<ProgressCore />
 	</section>
 </DashboardLayout>

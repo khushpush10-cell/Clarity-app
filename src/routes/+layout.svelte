@@ -11,10 +11,12 @@
 	let { children } = $props();
 
 	onMount(() => {
-		const stored = localStorage.getItem('clarity_theme');
+		const storedTheme = localStorage.getItem('clarity_theme');
+		const storedPalette = localStorage.getItem('clarity_palette') ?? 'default-calm';
 		const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-		const theme = stored ?? (prefersDark ? 'dark' : 'light');
+		const theme = storedTheme ?? (prefersDark ? 'dark' : 'light');
 		document.documentElement.setAttribute('data-theme', theme);
+		document.documentElement.setAttribute('data-palette', storedPalette);
 		initObservability();
 		registerPwa();
 	});
@@ -23,7 +25,7 @@
 <svelte:head>
 	<link rel="icon" href={favicon} />
 	<link rel="manifest" href="/manifest.webmanifest" />
-	<meta name="theme-color" content="#4F46E5" />
+	<meta name="theme-color" content="#7F9C8A" />
 	<title>Clarity | Task manager and routines</title>
 	<meta
 		name="description"

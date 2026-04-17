@@ -61,12 +61,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.user = null;
 
 	const authDisabled = true;
-	const maintenance = env.MAINTENANCE_MODE === '1' && !authDisabled;
-	if (
-		maintenance &&
-		event.url.pathname !== '/maintenance' &&
-		!event.url.pathname.startsWith('/api/health')
-	) {
+	const maintenance = false;
+	if (maintenance && event.url.pathname !== '/maintenance' && !event.url.pathname.startsWith('/api/health')) {
 		throw redirect(302, '/maintenance');
 	}
 
@@ -86,6 +82,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (authBypass) {
 		if (
 			event.url.pathname === '/' ||
+			event.url.pathname === '/maintenance' ||
 			event.url.pathname.startsWith('/auth')
 		) {
 			throw redirect(302, '/dashboard');

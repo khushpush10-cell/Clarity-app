@@ -19,11 +19,11 @@
 	}
 
 	interface FilterPresetApiItem extends FilterPreset {
-	userId: string;
-	createdAt: string;
-}
+		userId: string;
+		createdAt: string;
+	}
 
-interface TaskTemplate {
+	interface TaskTemplate {
 		id: string;
 		title: string;
 		description: string | null;
@@ -61,12 +61,16 @@ interface TaskTemplate {
 		{ key: 'table', label: 'Table' }
 	];
 
+	const defaultTemplates: TaskTemplate[] = [
+		{ id: 'morning-routine', title: 'Morning routine', description: 'Plan priorities, hydrate, review calendar', priority: 'MEDIUM' },
+		{ id: 'study-plan', title: 'Study plan', description: '45 min focus + 10 min revision', priority: 'HIGH' },
+		{ id: 'gym-schedule', title: 'Gym schedule', description: 'Workout + cool down + meal prep', priority: 'MEDIUM' }
+	];
+
 	onMount(() => {
 		loadLocalState();
 		void bootstrap();
-
 		document.addEventListener('clarity:complete-hotkey', completeFirstPending as EventListener);
-
 		return () => {
 			document.removeEventListener('clarity:complete-hotkey', completeFirstPending as EventListener);
 			unsubscribe();
@@ -82,57 +86,30 @@ interface TaskTemplate {
 		const url = new URL(window.location.href);
 		const query = url.searchParams.get('search') ?? '';
 		if (query) tasks.setSearch(query);
-
 		const storedTemplates = localStorage.getItem('clarity_task_templates');
-		templates = storedTemplates ? (JSON.parse(storedTemplates) as TaskTemplate[]) : [];
+		templates = storedTemplates ? (JSON.parse(storedTemplates) as TaskTemplate[]) : defaultTemplates;
 	}
 
-	function persistPresetsLocal() {
-		localStorage.setItem('clarity_task_presets', JSON.stringify(presets));
-	}
-
-	function persistTemplates() {
-		localStorage.setItem('clarity_task_templates', JSON.stringify(templates));
-	}
-
-	function clearSelection() {
-		selectedIds = [];
-	}
-
-	function toggleSelect(id: string) {
-		if (selectedIds.includes(id)) {
-			selectedIds = selectedIds.filter((item) => item !== id);
-			return;
-		}
-		selectedIds = [...selectedIds, id];
-	}
-
-	function toggleSelectAll() {
-		if (selectedIds.length === items.length) {
-			selectedIds = [];
-			return;
-		}
-		selectedIds = items.map((item) => item.id);
-	}
+	function persistPresetsLocal() { localStorage.setItem('clarity_task_presets', JSON.stringify(presets)); }
+	function persistTemplates() { localStorage.setItem('clarity_task_templates', JSON.stringify(templates)); }
+	function clearSelection() { selectedIds = []; }
+	function toggleSelect(id: string) { selectedIds = selectedIds.includes(id) ? selectedIds.filter((item) => item !== id) : [...selectedIds, id]; }
+	function toggleSelectAll() { selectedIds = selectedIds.length === items.length ? [] : items.map((item) => item.id); }
 
 	async function loadTasks() {
 		tasks.setLoading(true);
 		tasks.setError(null);
-
 		try {
 			const params = new URLSearchParams();
 			params.set('pageSize', '100');
 			if (search) params.set('search', search);
 			if (statusFilter !== 'ALL') params.set('status', statusFilter);
 			if (priorityFilter !== 'ALL') params.set('priority', priorityFilter);
-
 			const result = await apiRequest<{ items?: TaskItem[]; error?: string }>(`/api/tasks?${params.toString()}`);
-
 			if (!result.ok) {
 				tasks.setError(result.error ?? 'Unable to load tasks');
 				return;
 			}
-
 			tasks.setItems(result.data?.items ?? []);
 			currentWorkspaceId = (result.data as { workspaceId?: string } | null)?.workspaceId ?? null;
 			clearSelection();
@@ -145,15 +122,12 @@ interface TaskTemplate {
 
 	async function loadPresetsFromApi() {
 		const workspaceQuery = currentWorkspaceId ? `?workspaceId=${encodeURIComponent(currentWorkspaceId)}` : '';
-		const result = await apiRequest<{ items?: FilterPresetApiItem[]; error?: string }>(
-			`/api/tasks/filter-presets${workspaceQuery}`
-		);
+		const result = await apiRequest<{ items?: FilterPresetApiItem[]; error?: string }>(`/api/tasks/filter-presets${workspaceQuery}`);
 		if (!result.ok) {
 			const storedPresets = localStorage.getItem('clarity_task_presets');
 			presets = storedPresets ? (JSON.parse(storedPresets) as FilterPreset[]) : [];
 			return;
 		}
-
 		presets = (result.data?.items ?? []).map((item) => ({
 			id: item.id,
 			name: item.name,
@@ -164,61 +138,22 @@ interface TaskTemplate {
 		persistPresetsLocal();
 	}
 
-	async function createTask(
-		event: CustomEvent<{
-			title: string;
-			description: string | null;
-			priority: TaskPriorityUi;
-			dueDate: string | null;
-		}>
-	) {
-		const body = {
-			title: event.detail.title,
-			description: event.detail.description,
-			priority: event.detail.priority,
-			dueDate: event.detail.dueDate ? new Date(event.detail.dueDate).toISOString() : null
-		};
-
-		const result = await apiRequest<{ item?: TaskItem; error?: string }>('/api/tasks', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(body)
-		});
-
-		if (!result.ok) {
-			tasks.setError(result.error ?? 'Unable to create task');
-			return;
-		}
-
+	async function createTask(event: CustomEvent<{ title: string; description: string | null; priority: TaskPriorityUi; dueDate: string | null; }>) {
+		const body = { title: event.detail.title, description: event.detail.description, priority: event.detail.priority, dueDate: event.detail.dueDate ? new Date(event.detail.dueDate).toISOString() : null };
+		const result = await apiRequest<{ item?: TaskItem; error?: string }>('/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+		if (!result.ok) { tasks.setError(result.error ?? 'Unable to create task'); return; }
 		await loadTasks();
 	}
 
 	async function createFromTemplate(templateId: string) {
 		const template = templates.find((candidate: TaskTemplate) => candidate.id === templateId);
 		if (!template) return;
-
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>('/api/tasks', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				title: template.title,
-				description: template.description,
-				priority: template.priority
-			})
+			method: 'POST', headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ title: template.title, description: template.description, priority: template.priority })
 		});
-
-		if (!result.ok) {
-			tasks.setError(result.error ?? 'Unable to create task from template');
-			return;
-		}
-
-		notifications.push({
-			id: crypto.randomUUID(),
-			type: 'success',
-			title: 'Template applied',
-			message: `Task created from ${template.title}`
-		});
-
+		if (!result.ok) { tasks.setError(result.error ?? 'Unable to create task from template'); return; }
+		notifications.push({ id: crypto.randomUUID(), type: 'success', title: 'Template applied', message: `Task created from ${template.title}` });
 		await loadTasks();
 	}
 
@@ -226,13 +161,8 @@ interface TaskTemplate {
 		const title = prompt('Template title');
 		if (!title) return;
 		const description = prompt('Template description (optional)') ?? null;
-		const priorityInput = (
-			prompt('Priority: LOW/MEDIUM/HIGH/URGENT', 'MEDIUM') ?? 'MEDIUM'
-		).toUpperCase() as TaskPriorityUi;
-		const priority = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(priorityInput)
-			? priorityInput
-			: 'MEDIUM';
-
+		const priorityInput = (prompt('Priority: LOW/MEDIUM/HIGH/URGENT', 'MEDIUM') ?? 'MEDIUM').toUpperCase() as TaskPriorityUi;
+		const priority = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'].includes(priorityInput) ? priorityInput : 'MEDIUM';
 		templates = [{ id: crypto.randomUUID(), title, description, priority }, ...templates];
 		persistTemplates();
 	}
@@ -240,85 +170,34 @@ interface TaskTemplate {
 	async function saveFilterPreset() {
 		const name = prompt('Preset name');
 		if (!name) return;
-
-		const payload: {
-			workspaceId?: string;
-			name: string;
-			search: string;
-			statusFilter: TaskStatusUi | 'ALL';
-			priorityFilter: TaskPriorityUi | 'ALL';
-		} = {
-			name,
-			search,
-			statusFilter,
-			priorityFilter
-		};
-		if (currentWorkspaceId) {
-			payload.workspaceId = currentWorkspaceId;
-		}
-
-		const result = await apiRequest<{ item?: FilterPresetApiItem; error?: string }>('/api/tasks/filter-presets', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(payload)
-		});
-
-		if (!result.ok || !result.data?.item) {
-			tasks.setError(result.error ?? 'Unable to save filter preset');
-			return;
-		}
-
+		const payload: { workspaceId?: string; name: string; search: string; statusFilter: TaskStatusUi | 'ALL'; priorityFilter: TaskPriorityUi | 'ALL'; } = { name, search, statusFilter, priorityFilter };
+		if (currentWorkspaceId) payload.workspaceId = currentWorkspaceId;
+		const result = await apiRequest<{ item?: FilterPresetApiItem; error?: string }>('/api/tasks/filter-presets', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+		if (!result.ok || !result.data?.item) { tasks.setError(result.error ?? 'Unable to save filter preset'); return; }
 		const item = result.data.item;
-		presets = [
-			{
-				id: item.id,
-				name: item.name,
-				search: item.search,
-				statusFilter: item.statusFilter,
-				priorityFilter: item.priorityFilter
-			},
-			...presets
-		];
+		presets = [{ id: item.id, name: item.name, search: item.search, statusFilter: item.statusFilter, priorityFilter: item.priorityFilter }, ...presets];
 		persistPresetsLocal();
 	}
 
 	async function applyPreset(presetId: string) {
 		const preset = presets.find((candidate: FilterPreset) => candidate.id === presetId);
 		if (!preset) return;
-
-		tasks.setSearch(preset.search);
-		tasks.setStatusFilter(preset.statusFilter);
-		tasks.setPriorityFilter(preset.priorityFilter);
+		tasks.setSearch(preset.search); tasks.setStatusFilter(preset.statusFilter); tasks.setPriorityFilter(preset.priorityFilter);
 		await loadTasks();
 	}
 
 	async function deletePreset(presetId: string) {
 		const workspaceQuery = currentWorkspaceId ? `?workspaceId=${encodeURIComponent(currentWorkspaceId)}` : '';
-		const result = await apiRequest<{ success?: boolean; error?: string }>(
-			`/api/tasks/filter-presets/${presetId}${workspaceQuery}`,
-			{ method: 'DELETE' }
-		);
-
-		if (!result.ok) {
-			tasks.setError(result.error ?? 'Unable to delete preset');
-			return;
-		}
-
+		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/tasks/filter-presets/${presetId}${workspaceQuery}`, { method: 'DELETE' });
+		if (!result.ok) { tasks.setError(result.error ?? 'Unable to delete preset'); return; }
 		presets = presets.filter((candidate: FilterPreset) => candidate.id !== presetId);
 		persistPresetsLocal();
 	}
 
-	function orderedIdsForStatus(status: TaskStatusUi): string[] {
-		return items
-			.filter((candidate) => candidate.status === status)
-			.sort((a, b) => a.position - b.position)
-			.map((candidate) => candidate.id);
-	}
-
+	function orderedIdsForStatus(status: TaskStatusUi): string[] { return items.filter((candidate) => candidate.status === status).sort((a, b) => a.position - b.position).map((candidate) => candidate.id); }
 	function insertBefore(ids: string[], movingId: string, beforeId: string | null | undefined): string[] {
 		const base = ids.filter((id) => id !== movingId);
 		if (!beforeId) return [...base, movingId];
-
 		const index = base.indexOf(beforeId);
 		if (index === -1) return [...base, movingId];
 		return [...base.slice(0, index), movingId, ...base.slice(index)];
@@ -327,64 +206,37 @@ interface TaskTemplate {
 	async function persistOrder(workspaceId: string, status: TaskStatusUi, orderedIds: string[]) {
 		if (orderedIds.length === 0) return;
 		const result = await apiRequest<{ success?: boolean; error?: string }>('/api/tasks/reorder', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ workspaceId, status, orderedIds })
+			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ workspaceId, status, orderedIds })
 		});
-		if (!result.ok) {
-			throw new Error(result.error ?? 'Unable to reorder tasks');
-		}
+		if (!result.ok) throw new Error(result.error ?? 'Unable to reorder tasks');
 	}
 
-	async function completeTask(event: CustomEvent<string>) {
-		await completeTaskById(event.detail);
-	}
-
+	async function completeTask(event: CustomEvent<string>) { await completeTaskById(event.detail); }
 	async function completeTaskById(id: string) {
-		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${id}/complete`, {
-			method: 'POST'
-		});
-		if (!result.ok) {
-			tasks.setError(result.error ?? 'Unable to complete task');
-			return;
-		}
+		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${id}/complete`, { method: 'POST' });
+		if (!result.ok) { tasks.setError(result.error ?? 'Unable to complete task'); return; }
 		await loadTasks();
 	}
 
 	async function bulkCompleteSelected() {
 		if (selectedIds.length === 0) return;
-		bulkLoading = true;
-		error = null;
-		const ids = [...selectedIds];
-		for (const id of ids) {
+		bulkLoading = true; error = null;
+		for (const id of [...selectedIds]) {
 			const result = await apiRequest(`/api/tasks/${id}/complete`, { method: 'POST' });
-			if (!result.ok) {
-				error = result.error ?? 'Unable to complete selected tasks';
-				bulkLoading = false;
-				return;
-			}
+			if (!result.ok) { error = result.error ?? 'Unable to complete selected tasks'; bulkLoading = false; return; }
 		}
-		bulkLoading = false;
-		await loadTasks();
+		bulkLoading = false; await loadTasks();
 	}
 
 	async function bulkDeleteSelected() {
 		if (selectedIds.length === 0) return;
-		const ok = confirm(`Delete ${selectedIds.length} selected tasks?`);
-		if (!ok) return;
-		bulkLoading = true;
-		error = null;
-		const ids = [...selectedIds];
-		for (const id of ids) {
+		const ok = confirm(`Delete ${selectedIds.length} selected tasks?`); if (!ok) return;
+		bulkLoading = true; error = null;
+		for (const id of [...selectedIds]) {
 			const result = await apiRequest(`/api/tasks/${id}`, { method: 'DELETE' });
-			if (!result.ok) {
-				error = result.error ?? 'Unable to delete selected tasks';
-				bulkLoading = false;
-				return;
-			}
+			if (!result.ok) { error = result.error ?? 'Unable to delete selected tasks'; bulkLoading = false; return; }
 		}
-		bulkLoading = false;
-		await loadTasks();
+		bulkLoading = false; await loadTasks();
 	}
 
 	async function completeFirstPending() {
@@ -393,57 +245,28 @@ interface TaskTemplate {
 		await completeTaskById(target.id);
 	}
 
-	async function duplicateTask(event: CustomEvent<string>) {
-		await duplicateTaskById(event.detail);
-	}
-
+	async function duplicateTask(event: CustomEvent<string>) { await duplicateTaskById(event.detail); }
 	async function duplicateTaskById(id: string) {
-		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${id}/duplicate`, {
-			method: 'POST'
-		});
-		if (!result.ok) {
-			tasks.setError(result.error ?? 'Unable to duplicate task');
-			return;
-		}
+		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${id}/duplicate`, { method: 'POST' });
+		if (!result.ok) { tasks.setError(result.error ?? 'Unable to duplicate task'); return; }
 		await loadTasks();
 	}
 
-	async function deleteTask(event: CustomEvent<string>) {
-		await deleteTaskById(event.detail);
-	}
-
+	async function deleteTask(event: CustomEvent<string>) { await deleteTaskById(event.detail); }
 	async function deleteTaskById(id: string) {
-		const ok = confirm('Delete this task?');
-		if (!ok) return;
-
-		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/tasks/${id}`, {
-			method: 'DELETE'
-		});
-		if (!result.ok) {
-			tasks.setError(result.error ?? 'Unable to delete task');
-			return;
-		}
+		const ok = confirm('Delete this task?'); if (!ok) return;
+		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/tasks/${id}`, { method: 'DELETE' });
+		if (!result.ok) { tasks.setError(result.error ?? 'Unable to delete task'); return; }
 		await loadTasks();
 	}
 
 	async function editTask(event: CustomEvent<{ id: string; title: string }>) {
-		const nextTitle = event.detail.title.includes('(Copy)')
-			? event.detail.title
-			: (prompt('Edit task title', event.detail.title) ?? event.detail.title).trim();
-
+		const nextTitle = event.detail.title.includes('(Copy)') ? event.detail.title : (prompt('Edit task title', event.detail.title) ?? event.detail.title).trim();
 		if (!nextTitle) return;
-
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${event.detail.id}`, {
-			method: 'PUT',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ title: nextTitle })
+			method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: nextTitle })
 		});
-
-		if (!result.ok) {
-			tasks.setError(result.error ?? 'Unable to update task');
-			return;
-		}
-
+		if (!result.ok) { tasks.setError(result.error ?? 'Unable to update task'); return; }
 		await loadTasks();
 	}
 
@@ -452,132 +275,75 @@ interface TaskTemplate {
 		const optimistic = items.map((item) => (item.id === id ? { ...item, ...patch } : item));
 		tasks.setItems(optimistic);
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${id}`, {
-			method: 'PUT',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				status: patch.status,
-				priority: patch.priority,
-				dueDate: patch.dueDate
-			})
+			method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status: patch.status, priority: patch.priority, dueDate: patch.dueDate })
 		});
-		if (!result.ok) {
-			tasks.setItems(previous);
-			tasks.setError(result.error ?? 'Unable to update task');
-			return;
-		}
+		if (!result.ok) { tasks.setItems(previous); tasks.setError(result.error ?? 'Unable to update task'); return; }
 		await loadTasks();
 	}
 
 	async function moveTask(event: CustomEvent<{ id: string; status: TaskStatusUi; beforeId?: string | null }>) {
-		const moving = items.find((candidate) => candidate.id === event.detail.id);
-		if (!moving) return;
-
+		const moving = items.find((candidate) => candidate.id === event.detail.id); if (!moving) return;
 		const canPersistReorder = !search && statusFilter === 'ALL' && priorityFilter === 'ALL';
-		if (!canPersistReorder) {
-			await patchTask(event.detail.id, { status: event.detail.status });
-			return;
-		}
-
+		if (!canPersistReorder) { await patchTask(event.detail.id, { status: event.detail.status }); return; }
 		try {
-			const sourceStatus = moving.status;
-			const targetStatus = event.detail.status;
-			const workspaceId = moving.workspaceId;
-
+			const sourceStatus = moving.status; const targetStatus = event.detail.status; const workspaceId = moving.workspaceId;
 			if (sourceStatus === targetStatus) {
-				const reordered = insertBefore(
-					orderedIdsForStatus(targetStatus),
-					moving.id,
-					event.detail.beforeId ?? null
-				);
+				const reordered = insertBefore(orderedIdsForStatus(targetStatus), moving.id, event.detail.beforeId ?? null);
 				await persistOrder(workspaceId, targetStatus, reordered);
 			} else {
 				const sourceOrdered = orderedIdsForStatus(sourceStatus).filter((id) => id !== moving.id);
-				const targetOrdered = insertBefore(
-					orderedIdsForStatus(targetStatus),
-					moving.id,
-					event.detail.beforeId ?? null
-				);
-
+				const targetOrdered = insertBefore(orderedIdsForStatus(targetStatus), moving.id, event.detail.beforeId ?? null);
 				await persistOrder(workspaceId, sourceStatus, sourceOrdered);
 				await persistOrder(workspaceId, targetStatus, targetOrdered);
 			}
-
 			await loadTasks();
 		} catch (err) {
 			tasks.setError(err instanceof Error ? err.message : 'Unable to move task');
 		}
 	}
 
-	async function onSearch(event: CustomEvent<string>) {
-		tasks.setSearch(event.detail);
-		await loadTasks();
-	}
-
-	async function onStatus(event: CustomEvent<TaskStatusUi | 'ALL'>) {
-		tasks.setStatusFilter(event.detail);
-		await loadTasks();
-	}
-
-	async function onPriority(event: CustomEvent<TaskPriorityUi | 'ALL'>) {
-		tasks.setPriorityFilter(event.detail);
-		await loadTasks();
-	}
-
+	async function onSearch(event: CustomEvent<string>) { tasks.setSearch(event.detail); await loadTasks(); }
+	async function onStatus(event: CustomEvent<TaskStatusUi | 'ALL'>) { tasks.setStatusFilter(event.detail); await loadTasks(); }
+	async function onPriority(event: CustomEvent<TaskPriorityUi | 'ALL'>) { tasks.setPriorityFilter(event.detail); await loadTasks(); }
 	async function createTaskFromCalendar(event: CustomEvent<{ title: string; dueDate: string | null }>) {
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>('/api/tasks', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({
-				title: event.detail.title,
-				description: null,
-				priority: 'MEDIUM',
-				dueDate: event.detail.dueDate
-			})
+			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: event.detail.title, description: null, priority: 'MEDIUM', dueDate: event.detail.dueDate })
 		});
-		if (!result.ok) {
-			tasks.setError(result.error ?? 'Unable to create task');
-			return;
-		}
+		if (!result.ok) { tasks.setError(result.error ?? 'Unable to create task'); return; }
 		await loadTasks();
 	}
-
-	async function rescheduleTask(event: CustomEvent<{ id: string; dueDate: string | null }>) {
-		await patchTask(event.detail.id, { dueDate: event.detail.dueDate });
-	}
-
-	function setView(nextView: 'list' | 'kanban' | 'calendar' | 'table') {
-		tasks.setView(nextView);
-	}
+	async function rescheduleTask(event: CustomEvent<{ id: string; dueDate: string | null }>) { await patchTask(event.detail.id, { dueDate: event.detail.dueDate }); }
+	function setView(nextView: 'list' | 'kanban' | 'calendar' | 'table') { tasks.setView(nextView); }
 </script>
 
 <section class="space-y-4">
-	<div class="flex items-center justify-between">
-		<h1 class="text-2xl font-bold text-text-primary">Tasks</h1>
+	<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+		<h1 class="text-3xl font-semibold text-text-primary">Tasks</h1>
 		<div class="flex items-center gap-2">
-			<button class="rounded-[8px] border border-border px-3 py-2 text-xs" onclick={saveTemplate} type="button">Save Template</button>
-			<button class="rounded-[8px] border border-border px-3 py-2 text-xs" onclick={saveFilterPreset} type="button">Save Filter</button>
+			<button class="rounded-full border border-border bg-surface-2 px-3 py-2 text-xs" onclick={saveTemplate} type="button">Save template</button>
+			<button class="rounded-full border border-border bg-surface-2 px-3 py-2 text-xs" onclick={saveFilterPreset} type="button">Save filter</button>
 		</div>
 	</div>
 
 	{#if templates.length > 0}
-		<div class="rounded-[8px] border border-border bg-surface p-3">
-			<p class="mb-2 text-xs font-semibold tracking-[0.06em] text-text-secondary uppercase">Task Templates</p>
+		<div class="app-card p-3">
+			<p class="mb-2 text-xs font-semibold uppercase tracking-[0.06em] text-text-secondary">Task templates</p>
 			<div class="flex flex-wrap gap-2">
 				{#each templates as template (template.id)}
-					<button class="rounded-[8px] border border-border px-3 py-2 text-xs" onclick={() => createFromTemplate(template.id)} type="button">{template.title}</button>
+					<button class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs" onclick={() => createFromTemplate(template.id)} type="button">{template.title}</button>
 				{/each}
 			</div>
 		</div>
 	{/if}
 
 	{#if presets.length > 0}
-		<div class="rounded-[8px] border border-border bg-surface p-3">
-			<p class="mb-2 text-xs font-semibold tracking-[0.06em] text-text-secondary uppercase">Saved Filters</p>
+		<div class="app-card p-3">
+			<p class="mb-2 text-xs font-semibold uppercase tracking-[0.06em] text-text-secondary">Saved filters</p>
 			<div class="flex flex-wrap gap-2">
 				{#each presets as preset (preset.id)}
-					<div class="inline-flex items-center gap-1 rounded-[8px] border border-border px-2 py-1">
+					<div class="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-1">
 						<button class="text-xs" onclick={() => applyPreset(preset.id)} type="button">{preset.name}</button>
-						<button class="text-xs text-urgent" onclick={() => deletePreset(preset.id)} type="button">x</button>
+						<button class="rounded-full px-1 text-xs text-warning" onclick={() => deletePreset(preset.id)} type="button">x</button>
 					</div>
 				{/each}
 			</div>
@@ -588,43 +354,41 @@ interface TaskTemplate {
 	<TaskFilters on:search={onSearch} on:status={onStatus} on:priority={onPriority} />
 
 	<div class="flex flex-wrap items-center gap-2">
-		{#each views as item}
-			<button
-				class={`rounded-[8px] px-3 py-1.5 text-sm font-medium ${
-					view === item.key ? 'bg-primary text-white' : 'border border-border bg-surface text-text-primary'
-				}`}
-				onclick={() => setView(item.key)}
-				type="button"
-			>
-				{item.label}
-			</button>
-		{/each}
+		<div class="inline-flex rounded-full border border-border bg-surface p-1">
+			{#each views as item}
+				<button class={`rounded-full px-3 py-1.5 text-sm font-medium ${view === item.key ? 'bg-secondary-tint text-secondary' : 'text-text-secondary'}`} onclick={() => setView(item.key)} type="button">{item.label}</button>
+			{/each}
+		</div>
 
 		{#if selectedIds.length > 0}
-			<div class="ml-auto flex items-center gap-2 rounded-[8px] border border-border bg-surface px-3 py-1.5">
+			<div class="ml-auto flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5">
 				<span class="text-xs text-text-secondary">{selectedIds.length} selected</span>
-				<button class="rounded-[8px] bg-success px-2 py-1 text-xs text-white disabled:opacity-50" disabled={bulkLoading} onclick={bulkCompleteSelected} type="button">Complete</button>
-				<button class="rounded-[8px] bg-urgent px-2 py-1 text-xs text-white disabled:opacity-50" disabled={bulkLoading} onclick={bulkDeleteSelected} type="button">Delete</button>
+				<button class="rounded-full bg-primary px-2.5 py-1 text-xs text-on-primary disabled:opacity-50" disabled={bulkLoading} onclick={bulkCompleteSelected} type="button">Complete</button>
+				<button class="rounded-full bg-danger px-2.5 py-1 text-xs text-white disabled:opacity-50" disabled={bulkLoading} onclick={bulkDeleteSelected} type="button">Delete</button>
 			</div>
 		{/if}
 	</div>
 
 	{#if error}
-		<p class="rounded-[8px] border border-urgent/40 bg-urgent/10 px-3 py-2 text-sm text-urgent">{error}</p>
+		<p class="rounded-[14px] border border-warning bg-warning-tint px-3 py-2 text-sm text-warning">{error}</p>
 	{/if}
 
 	{#if loading}
 		<p class="text-sm text-text-secondary">Loading tasks...</p>
 	{:else if items.length === 0}
-		<p class="rounded-[8px] border border-border bg-surface p-4 text-sm text-text-secondary">No tasks yet.</p>
+		<div class="empty-state">
+			<p class="text-sm">No tasks yet. Start with one clear action and build momentum.</p>
+			<div class="mt-3 flex flex-wrap gap-2">
+				<button class="rounded-full bg-primary px-3 py-1.5 text-xs text-on-primary" onclick={() => createFromTemplate('morning-routine')} type="button">Add your first task</button>
+				<button class="rounded-full border border-border px-3 py-1.5 text-xs" onclick={saveTemplate} type="button">Use template</button>
+			</div>
+		</div>
 	{:else if view === 'list'}
 		<div class="space-y-3">
 			{#each items as item (item.id)}
 				<div class="flex items-start gap-2">
 					<input checked={selectedIds.includes(item.id)} onclick={() => toggleSelect(item.id)} type="checkbox" />
-					<div class="flex-1">
-						<TaskCard {item} on:complete={completeTask} on:delete={deleteTask} on:duplicate={duplicateTask} on:edit={editTask} />
-					</div>
+					<div class="flex-1"><TaskCard {item} on:complete={completeTask} on:delete={deleteTask} on:duplicate={duplicateTask} on:edit={editTask} /></div>
 				</div>
 			{/each}
 		</div>
@@ -633,56 +397,26 @@ interface TaskTemplate {
 	{:else if view === 'calendar'}
 		<CalendarView items={items} on:complete={completeTask} on:delete={deleteTask} on:duplicate={duplicateTask} on:edit={editTask} on:create={createTaskFromCalendar} on:reschedule={rescheduleTask} />
 	{:else}
-		<div class="overflow-auto rounded-[8px] border border-border bg-surface">
+		<div class="app-card overflow-auto">
 			<table class="min-w-full border-collapse text-sm">
-				<thead class="bg-background text-left text-text-secondary">
+				<thead class="bg-surface-2 text-left text-text-secondary">
 					<tr>
-						<th class="px-3 py-2">
-							<input checked={selectedIds.length === items.length && items.length > 0} onclick={toggleSelectAll} type="checkbox" />
-						</th>
-						<th class="px-3 py-2">Title</th>
-						<th class="px-3 py-2">Status</th>
-						<th class="px-3 py-2">Priority</th>
-						<th class="px-3 py-2">Due Date</th>
-						<th class="px-3 py-2">Actions</th>
+						<th class="px-3 py-2"><input checked={selectedIds.length === items.length && items.length > 0} onclick={toggleSelectAll} type="checkbox" /></th>
+						<th class="px-3 py-2">Title</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Priority</th><th class="px-3 py-2">Due Date</th><th class="px-3 py-2">Actions</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each items as item (item.id)}
 						<tr class="border-t border-border">
-							<td class="px-3 py-2">
-								<input checked={selectedIds.includes(item.id)} onclick={() => toggleSelect(item.id)} type="checkbox" />
-							</td>
+							<td class="px-3 py-2"><input checked={selectedIds.includes(item.id)} onclick={() => toggleSelect(item.id)} type="checkbox" /></td>
 							<td class="px-3 py-2 font-medium text-text-primary">{item.title}</td>
-							<td class="px-3 py-2">
-								<select class="rounded border border-border px-2 py-1 text-xs" value={item.status} onchange={(event) => patchTask(item.id, { status: (event.currentTarget as HTMLSelectElement).value as TaskStatusUi })}>
-									{#each ['TODO', 'IN_PROGRESS', 'DONE'] as option}
-										<option value={option}>{option}</option>
-									{/each}
-								</select>
-							</td>
-							<td class="px-3 py-2">
-								<select class="rounded border border-border px-2 py-1 text-xs" value={item.priority} onchange={(event) => patchTask(item.id, { priority: (event.currentTarget as HTMLSelectElement).value as TaskPriorityUi })}>
-									{#each ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as option}
-										<option value={option}>{option}</option>
-									{/each}
-								</select>
-							</td>
-							<td class="px-3 py-2">
-								<input class="rounded border border-border px-2 py-1 text-xs" type="date" value={item.dueDate ? new Date(item.dueDate).toISOString().slice(0, 10) : ''} onchange={(event) => {
-									const value = (event.currentTarget as HTMLInputElement).value;
-									patchTask(item.id, { dueDate: value ? new Date(value + 'T00:00:00.000Z').toISOString() : null });
-								}} />
-							</td>
-							<td class="px-3 py-2">
-								<div class="flex flex-wrap gap-2">
-									{#if item.status !== 'DONE'}
-										<button class="rounded-[8px] bg-success px-2 py-1 text-xs text-white" onclick={() => completeTaskById(item.id)} type="button">Complete</button>
-									{/if}
-									<button class="rounded-[8px] border border-border px-2 py-1 text-xs" onclick={() => duplicateTaskById(item.id)} type="button">Duplicate</button>
-									<button class="rounded-[8px] bg-urgent px-2 py-1 text-xs text-white" onclick={() => deleteTaskById(item.id)} type="button">Delete</button>
-								</div>
-							</td>
+							<td class="px-3 py-2"><select class="rounded-[10px] border border-border bg-surface-2 px-2 py-1 text-xs" value={item.status} onchange={(event) => patchTask(item.id, { status: (event.currentTarget as HTMLSelectElement).value as TaskStatusUi })}>{#each ['TODO', 'IN_PROGRESS', 'DONE'] as option}<option value={option}>{option}</option>{/each}</select></td>
+							<td class="px-3 py-2"><select class="rounded-[10px] border border-border bg-surface-2 px-2 py-1 text-xs" value={item.priority} onchange={(event) => patchTask(item.id, { priority: (event.currentTarget as HTMLSelectElement).value as TaskPriorityUi })}>{#each ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as option}<option value={option}>{option}</option>{/each}</select></td>
+							<td class="px-3 py-2"><input class="rounded-[10px] border border-border bg-surface-2 px-2 py-1 text-xs" type="date" value={item.dueDate ? new Date(item.dueDate).toISOString().slice(0, 10) : ''} onchange={(event) => {
+								const value = (event.currentTarget as HTMLInputElement).value;
+								patchTask(item.id, { dueDate: value ? new Date(value + 'T00:00:00.000Z').toISOString() : null });
+							}} /></td>
+							<td class="px-3 py-2"><div class="flex flex-wrap gap-2">{#if item.status !== 'DONE'}<button class="rounded-full bg-primary px-2 py-1 text-xs text-on-primary" onclick={() => completeTaskById(item.id)} type="button">Complete</button>{/if}<button class="rounded-full border border-border px-2 py-1 text-xs" onclick={() => duplicateTaskById(item.id)} type="button">Duplicate</button><button class="rounded-full bg-danger px-2 py-1 text-xs text-white" onclick={() => deleteTaskById(item.id)} type="button">Delete</button></div></td>
 						</tr>
 					{/each}
 				</tbody>
@@ -690,7 +424,3 @@ interface TaskTemplate {
 		</div>
 	{/if}
 </section>
-
-
-
-

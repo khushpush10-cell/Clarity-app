@@ -55,22 +55,22 @@
 </script>
 
 <header
-	class="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-surface px-6"
+	class="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-surface px-3 md:px-4 lg:px-6"
 >
 	<div class="w-full max-w-2xl">
 		<input
 			bind:value={query}
 			aria-label="Global search"
-			class="w-full rounded-[8px] border border-border px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+			class="w-full rounded-full border border-border bg-surface-2 px-4 py-2 text-sm outline-none"
 			placeholder="Search tasks, habits, goals..."
 			onkeydown={onSearchKeydown}
 			type="search"
 		/>
 	</div>
-	<div class="relative ml-6 flex items-center gap-3 text-sm text-text-secondary">
-		<span>Press J/K to navigate</span>
+	<div class="relative ml-3 flex items-center gap-2 text-sm text-text-secondary md:ml-6 md:gap-3">
+		<span class="hidden lg:inline">Press J/K to navigate</span>
 		<button
-			class="rounded-[8px] border border-border px-3 py-1.5 text-text-primary hover:bg-[color-mix(in_srgb,var(--color-primary)_10%,white)]"
+			class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-text-primary"
 			onclick={toggleTheme}
 			type="button"
 		>
@@ -79,17 +79,17 @@
 
 		<div class="relative">
 			<button
-				class="relative rounded-[8px] border border-border px-3 py-1.5 text-text-primary"
+				class="relative rounded-full border border-border bg-surface-2 px-3 py-1.5 text-text-primary"
 				onclick={() => (notificationOpen = !notificationOpen)}
 				type="button"
 			>
 				Notifications
 				{#if unread > 0}
-					<span class="absolute -top-2 -right-2 grid h-5 w-5 place-items-center rounded-full bg-urgent text-[10px] text-white">{unread}</span>
+					<span class="absolute -top-2 -right-2 grid h-5 w-5 place-items-center rounded-full bg-attention text-[10px] text-white">{unread}</span>
 				{/if}
 			</button>
 			{#if notificationOpen}
-				<div class="absolute right-0 z-20 mt-2 w-80 rounded-[8px] border border-border bg-surface p-3 shadow-lg">
+				<div class="absolute right-0 z-20 mt-2 w-80 rounded-[14px] border border-border bg-surface p-3 shadow-lg">
 					<div class="mb-2 flex items-center justify-between">
 						<p class="text-xs font-semibold tracking-[0.06em] text-text-secondary uppercase">Notifications</p>
 						<button class="text-xs text-secondary" onclick={readAll} type="button">Mark all read</button>
@@ -100,7 +100,7 @@
 						{:else}
 							{#each notifications as item (item.id)}
 								<button
-									class={`w-full rounded-[8px] border px-3 py-2 text-left ${item.read ? 'border-border bg-background' : 'border-primary/30 bg-primary/10'}`}
+									class={`w-full rounded-[14px] border px-3 py-2 text-left ${item.read ? 'border-border bg-surface-2' : 'border-secondary bg-secondary-tint'}`}
 									onclick={() => openNotification(item)}
 									type="button"
 								>
@@ -114,6 +114,6 @@
 			{/if}
 		</div>
 
-		<a class="rounded-[8px] border border-border px-3 py-1.5 text-text-primary" href="/settings">{page.data.user?.name ?? 'Guest'}</a>
+		<a class="hidden rounded-full border border-border px-3 py-1.5 text-text-primary md:inline" href="/settings">{page.data.user?.name ?? 'User'}</a>
 	</div>
 </header>

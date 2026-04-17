@@ -15,11 +15,11 @@
 	let { collapsed = false } = $props<{ collapsed?: boolean }>();
 </script>
 
-<aside class={`h-screen border-r border-border bg-surface p-4 ${collapsed ? 'w-20' : 'w-60'}`}>
+<aside class={`sticky top-0 hidden h-screen border-r border-border bg-surface p-4 lg:block ${collapsed ? 'w-20' : 'w-60'}`}>
 	<div class="mb-6 border-b border-border pb-4">
-		<p class="text-lg font-bold text-primary">Clarity</p>
+		<p class="text-3xl font-semibold text-primary">Clarity</p>
 		{#if !collapsed}
-			<p class="text-xs text-text-secondary">Task manager and routines</p>
+			<p class="text-sm text-text-secondary">Task manager and routines</p>
 		{/if}
 	</div>
 
@@ -29,10 +29,10 @@
 				page.url.pathname === item.href || page.url.pathname.startsWith(`${item.href}/`)}
 			<a
 				href={item.href}
-				class={`block rounded-[8px] px-3 py-2 text-sm font-medium transition ${
+				class={`block rounded-full px-3 py-2 text-sm font-medium transition ${
 					active
-						? 'bg-primary text-white'
-						: 'text-text-primary hover:bg-[color-mix(in_srgb,var(--color-primary)_10%,white)]'
+						? 'bg-secondary-tint text-secondary'
+						: 'text-text-primary hover:bg-surface-2'
 				}`}
 			>
 				{#if collapsed}{item.label.slice(0, 1)}{:else}{item.label}{/if}
@@ -41,21 +41,12 @@
 	</nav>
 
 	{#if !collapsed}
-		<div class="mt-8 rounded-[8px] border border-border p-3">
-			<p class="text-xs font-semibold text-text-secondary">Quick Filters</p>
+		<div class="mt-8 rounded-[14px] border border-border bg-surface-2 p-3">
+			<p class="text-xs font-semibold uppercase tracking-[0.06em] text-text-secondary">Quick Filters</p>
 			<div class="mt-2 space-y-1 text-sm">
-				<a
-					class="block rounded-[8px] px-2 py-1 hover:bg-[color-mix(in_srgb,var(--color-primary)_10%,white)]"
-					href="/tasks?filter=today">Today</a
-				>
-				<a
-					class="block rounded-[8px] px-2 py-1 hover:bg-[color-mix(in_srgb,var(--color-primary)_10%,white)]"
-					href="/tasks?filter=upcoming">Upcoming</a
-				>
-				<a
-					class="block rounded-[8px] px-2 py-1 hover:bg-[color-mix(in_srgb,var(--color-primary)_10%,white)]"
-					href="/tasks?filter=overdue">Overdue</a
-				>
+				<a class="block rounded-full px-2 py-1 hover:bg-surface" href="/tasks?filter=today">Today</a>
+				<a class="block rounded-full px-2 py-1 hover:bg-surface" href="/tasks?filter=upcoming">Upcoming</a>
+				<a class="block rounded-full px-2 py-1 hover:bg-surface" href="/tasks?filter=overdue">Overdue</a>
 			</div>
 		</div>
 	{/if}

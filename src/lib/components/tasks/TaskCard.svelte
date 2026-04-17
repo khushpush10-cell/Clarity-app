@@ -12,11 +12,11 @@
 		edit: { id: string; title: string };
 	}>();
 
-	const priorityClass: Record<TaskItem['priority'], string> = {
-		LOW: 'text-secondary',
-		MEDIUM: 'text-warning',
-		HIGH: 'text-urgent',
-		URGENT: 'text-urgent font-semibold'
+	const priorityBadge: Record<TaskItem['priority'], string> = {
+		LOW: 'bg-surface-2 text-text-secondary',
+		MEDIUM: 'bg-secondary-tint text-secondary',
+		HIGH: 'bg-warning-tint text-warning',
+		URGENT: 'bg-warning-tint text-warning font-semibold'
 	};
 
 	function editTitle() {
@@ -30,7 +30,6 @@
 		event.preventDefault();
 		const action = prompt('Action: complete | duplicate | edit | delete', 'complete')?.trim().toLowerCase();
 		if (!action) return;
-
 		if (action === 'complete') dispatch('complete', item.id);
 		if (action === 'duplicate') dispatch('duplicate', item.id);
 		if (action === 'edit') editTitle();
@@ -38,53 +37,29 @@
 	}
 </script>
 
-<article class="rounded-[8px] border border-border bg-surface p-4" oncontextmenu={onContextMenu}>
+<article class="app-card p-4" oncontextmenu={onContextMenu}>
 	<div class="flex items-start justify-between gap-4">
 		<div>
 			<a class="text-base font-semibold text-text-primary hover:text-primary" href={`/tasks/${item.id}`}>{item.title}</a>
 			{#if item.description}
 				<p class="mt-1 text-sm text-text-secondary">{item.description}</p>
 			{/if}
-			<div class="mt-2 flex gap-3 text-xs">
-				<span class="rounded-[8px] bg-background px-2 py-1 text-text-secondary">{item.status}</span>
-				<span class={priorityClass[item.priority as keyof typeof priorityClass]}>{item.priority}</span>
+			<div class="mt-2 flex flex-wrap gap-2 text-xs">
+				<span class="rounded-full bg-surface-2 px-2 py-1 text-text-secondary">{item.status}</span>
+				<span class={`rounded-full px-2 py-1 ${priorityBadge[item.priority as keyof typeof priorityBadge]}`}>{item.priority}</span>
 				{#if item.dueDate}
-					<span class="text-text-secondary">Due: {new Date(item.dueDate).toLocaleDateString()}</span>
+					<span class="rounded-full bg-surface-2 px-2 py-1 text-text-secondary">Due {new Date(item.dueDate).toLocaleDateString()}</span>
 				{/if}
 			</div>
 		</div>
 
 		<div class="flex flex-wrap justify-end gap-2">
-			<button
-				class="rounded-[8px] border border-border px-2 py-1 text-xs hover:bg-[color-mix(in_srgb,var(--color-primary)_10%,white)]"
-				onclick={editTitle}
-				type="button"
-			>
-				Edit
-			</button>
-			<button
-				class="rounded-[8px] border border-border px-2 py-1 text-xs hover:bg-[color-mix(in_srgb,var(--color-primary)_10%,white)]"
-				onclick={() => dispatch('duplicate', item.id)}
-				type="button"
-			>
-				Duplicate
-			</button>
+			<button class="rounded-full border border-border px-3 py-1.5 text-xs" onclick={editTitle} type="button">Edit</button>
+			<button class="rounded-full border border-border px-3 py-1.5 text-xs" onclick={() => dispatch('duplicate', item.id)} type="button">Duplicate</button>
 			{#if item.status !== 'DONE'}
-				<button
-					class="rounded-[8px] bg-success px-2 py-1 text-xs text-white hover:opacity-90"
-					onclick={() => dispatch('complete', item.id)}
-					type="button"
-				>
-					Complete
-				</button>
+				<button class="rounded-full bg-primary px-3 py-1.5 text-xs text-on-primary" onclick={() => dispatch('complete', item.id)} type="button">Complete</button>
 			{/if}
-			<button
-				class="rounded-[8px] bg-urgent px-2 py-1 text-xs text-white hover:opacity-90"
-				onclick={() => dispatch('delete', item.id)}
-				type="button"
-			>
-				Delete
-			</button>
+			<button class="rounded-full bg-danger px-3 py-1.5 text-xs text-white" onclick={() => dispatch('delete', item.id)} type="button">Delete</button>
 		</div>
 	</div>
 </article>
