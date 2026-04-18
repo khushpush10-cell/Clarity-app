@@ -7,12 +7,31 @@
 	import { apiRequest } from '$lib/utils/http';
 
 	interface WorkspaceItem { id: string; name: string; type: string; }
-	interface TaskItem { id: string; title: string; status: 'TODO' | 'IN_PROGRESS' | 'DONE'; assigneeId: string | null; }
+	interface TaskItem {
+		id: string;
+		workspaceId: string;
+		title: string;
+		status: 'TODO' | 'IN_PROGRESS' | 'DONE';
+		assigneeId: string | null;
+	}
+	interface MemberItem {
+		userId: string;
+		role: string;
+		user: { name: string };
+	}
+
+	interface LocalTeamState {
+		workspaces: WorkspaceItem[];
+		membersByWorkspace: Record<string, MemberItem[]>;
+	}
+
+	const LOCAL_TEAM_KEY = 'clarity_local_team_v1';
+	const LOCAL_TASKS_KEY = 'clarity_local_tasks_v1';
 
 	let workspaces = $state([] as WorkspaceItem[]);
 	let selectedWorkspaceId = $state<string | null>(null);
 	let workload = $state([] as WorkloadItem[]);
-	let members = $state([] as Array<{ userId: string; role: string; user: { name: string } }>);
+	let members = $state([] as MemberItem[]);
 	let error = $state<string | null>(null);
 	let loading = $state(false);
 
@@ -22,35 +41,40 @@
 
 	onMount(() => { void loadWorkspaces(); });
 
-	async function loadWorkspaces() {
-		loading = true; error = null;
+	function readLocalState(): LocalTeamState {
 		try {
-			const result = await apiRequest<{ items?: WorkspaceItem[]; error?: string }>('/api/workspaces');
-			if (!result.ok) { error = result.error ?? 'Unable to load workspaces'; return; }
-			workspaces = result.data?.items ?? [];
-			if (!selectedWorkspaceId) {
-				const firstWorkspace = workspaces.at(0);
-				if (firstWorkspace) selectedWorkspaceId = firstWorkspace.id;
-			}
-			await loadWorkspaceData();
-		} catch { error = 'Unable to load workspaces'; }
-		finally { loading = false; }
+			const raw = localStorage.getItem(LOCAL_TEAM_KEY);
+			return raw
+				? (JSON.parse(raw) as LocalTeamState)
+				: { workspaces: [], membersByWorkspace: {} };
+		} catch {
+			return { workspaces: [], membersByWorkspace: {} };
+		}
 	}
 
-	$effect(() => { if (selectedWorkspaceId) void loadWorkspaceData(); });
+	function writeLocalState(next: LocalTeamState) {
+		localStorage.setItem(LOCAL_TEAM_KEY, JSON.stringify(next));
+	}
 
-	async function loadWorkspaceData() {
-		if (!selectedWorkspaceId) return;
-		const [membersResult, tasksResult] = await Promise.all([
-			apiRequest<{ items?: Array<{ userId: string; role: string; user: { name: string } }>; error?: string }>(`/api/workspaces/${selectedWorkspaceId}/members`),
-			apiRequest<{ items?: TaskItem[]; error?: string }>(`/api/tasks?workspaceId=${selectedWorkspaceId}&pageSize=100`)
-		]);
-		if (!membersResult.ok) { error = membersResult.error ?? 'Unable to load members'; return; }
-		if (!tasksResult.ok) { error = tasksResult.error ?? 'Unable to load tasks'; return; }
-		members = membersResult.data?.items ?? [];
-		const tasks: TaskItem[] = tasksResult.data?.items ?? [];
+	function readLocalTasks(): TaskItem[] {
+		try {
+			const raw = localStorage.getItem(LOCAL_TASKS_KEY);
+			return raw ? (JSON.parse(raw) as TaskItem[]) : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function buildWorkload(membersInput: MemberItem[], tasks: TaskItem[]) {
 		const map = new Map<string, WorkloadItem>();
-		for (const member of members) map.set(member.userId, { member: member.user?.name ?? member.userId, total: 0, done: 0, inProgress: 0 });
+		for (const member of membersInput) {
+			map.set(member.userId, {
+				member: member.user?.name ?? member.userId,
+				total: 0,
+				done: 0,
+				inProgress: 0
+			});
+		}
 		for (const task of tasks) {
 			if (!task.assigneeId) continue;
 			const bucket = map.get(task.assigneeId);
@@ -62,13 +86,83 @@
 		workload = Array.from(map.values());
 	}
 
+	async function loadWorkspaces() {
+		loading = true; error = null;
+		try {
+			const result = await apiRequest<{ items?: WorkspaceItem[]; error?: string }>('/api/workspaces');
+			if (!result.ok) {
+				const local = readLocalState();
+				workspaces = local.workspaces;
+				error = 'Using offline mode (local browser storage)';
+			} else {
+				workspaces = result.data?.items ?? [];
+			}
+			if (!selectedWorkspaceId) {
+				const firstWorkspace = workspaces.at(0);
+				if (firstWorkspace) selectedWorkspaceId = firstWorkspace.id;
+			}
+			await loadWorkspaceData();
+		} catch {
+			const local = readLocalState();
+			workspaces = local.workspaces;
+			error = 'Using offline mode (local browser storage)';
+			if (!selectedWorkspaceId) {
+				const firstWorkspace = workspaces.at(0);
+				if (firstWorkspace) selectedWorkspaceId = firstWorkspace.id;
+			}
+			await loadWorkspaceData();
+		}
+		finally { loading = false; }
+	}
+
+	$effect(() => { if (selectedWorkspaceId) void loadWorkspaceData(); });
+
+	async function loadWorkspaceData() {
+		if (!selectedWorkspaceId) return;
+		const [membersResult, tasksResult] = await Promise.all([
+			apiRequest<{ items?: MemberItem[]; error?: string }>(`/api/workspaces/${selectedWorkspaceId}/members`),
+			apiRequest<{ items?: TaskItem[]; error?: string }>(`/api/tasks?workspaceId=${selectedWorkspaceId}&pageSize=100`)
+		]);
+
+		if (!membersResult.ok || !tasksResult.ok) {
+			const local = readLocalState();
+			members = local.membersByWorkspace[selectedWorkspaceId] ?? [];
+			const localTasks = readLocalTasks().filter((task) => task.workspaceId === selectedWorkspaceId);
+			buildWorkload(members, localTasks);
+			error = 'Using offline mode (local browser storage)';
+			return;
+		}
+
+		members = membersResult.data?.items ?? [];
+		const tasks: TaskItem[] = tasksResult.data?.items ?? [];
+		buildWorkload(members, tasks);
+	}
+
 	async function createWorkspace(event: SubmitEvent) {
 		event.preventDefault();
 		if (!workspaceName.trim()) return;
 		const result = await apiRequest<{ item?: WorkspaceItem; error?: string }>('/api/workspaces', {
 			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: workspaceName, type: 'TEAM' })
 		});
-		if (!result.ok) { error = result.error ?? 'Unable to create workspace'; return; }
+		if (!result.ok) {
+			const local = readLocalState();
+			const created: WorkspaceItem = {
+				id: crypto.randomUUID(),
+				name: workspaceName.trim(),
+				type: 'TEAM'
+			};
+			const nextState: LocalTeamState = {
+				workspaces: [created, ...local.workspaces],
+				membersByWorkspace: local.membersByWorkspace
+			};
+			writeLocalState(nextState);
+			workspaces = nextState.workspaces;
+			selectedWorkspaceId = created.id;
+			workspaceName = '';
+			error = 'Saved locally. Connect database to sync with server.';
+			await loadWorkspaceData();
+			return;
+		}
 		workspaceName = '';
 		await loadWorkspaces();
 	}
@@ -79,7 +173,28 @@
 		const result = await apiRequest<{ item?: unknown; error?: string }>(`/api/workspaces/${selectedWorkspaceId}/members`, {
 			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userId: inviteUserId.trim(), role: inviteRole })
 		});
-		if (!result.ok) { error = result.error ?? 'Unable to add member'; return; }
+		if (!result.ok) {
+			const local = readLocalState();
+			const created: MemberItem = {
+				userId: inviteUserId.trim() || crypto.randomUUID(),
+				role: inviteRole,
+				user: { name: inviteUserId.trim() || 'New Member' }
+			};
+			const existing = local.membersByWorkspace[selectedWorkspaceId] ?? [];
+			const nextState: LocalTeamState = {
+				workspaces: local.workspaces,
+				membersByWorkspace: {
+					...local.membersByWorkspace,
+					[selectedWorkspaceId]: [created, ...existing.filter((member) => member.userId !== created.userId)]
+				}
+			};
+			writeLocalState(nextState);
+			inviteUserId = '';
+			inviteRole = 'MEMBER';
+			error = 'Saved locally. Connect database to sync with server.';
+			await loadWorkspaceData();
+			return;
+		}
 		inviteUserId = ''; inviteRole = 'MEMBER';
 		await loadWorkspaceData();
 	}

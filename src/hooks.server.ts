@@ -60,6 +60,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.requestId = randomUUID();
 	event.locals.user = null;
 
+	if (event.url.pathname.startsWith('/maintenance')) {
+		throw redirect(302, '/dashboard');
+	}
+
 	const authDisabled = true;
 	const maintenance = false;
 	if (maintenance && event.url.pathname !== '/maintenance' && !event.url.pathname.startsWith('/api/health')) {

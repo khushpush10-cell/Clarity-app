@@ -1,4 +1,4 @@
-<script lang="ts">
+ï»¿<script lang="ts">
 	import { onMount } from 'svelte';
 
 	import HabitCard from '$lib/components/habits/HabitCard.svelte';
@@ -21,9 +21,13 @@
 	let mood = $state(3);
 	let energy = $state(3);
 	let reflection = $state('');
-	let checkIns = $state([] as Array<{ id: string; createdAt: string; changes: { mood?: number; energy?: number; reflection?: string } }>);
+	let checkIns = $state(
+		[] as Array<{ id: string; createdAt: string; changes: { mood?: number; energy?: number; reflection?: string } }>
+	);
 
 	const colorPresets = ['#7F9C8A', '#8FB3A0', '#B7A6C9', '#C7B6D8', '#C48A95'];
+	const LOCAL_HABITS_KEY = 'clarity_local_habits_v1';
+	const LOCAL_CHECKINS_KEY = 'clarity_local_checkins_v1';
 
 	const unsubscribe = habits.subscribe((value) => {
 		items = value.items;
@@ -34,6 +38,32 @@
 	const moodTrend = $derived.by(() => checkIns.slice(0, 7).map((entry) => entry.changes?.mood ?? 0).reverse());
 	const energyTrend = $derived.by(() => checkIns.slice(0, 7).map((entry) => entry.changes?.energy ?? 0).reverse());
 
+	function readLocalHabits(): HabitItem[] {
+		try {
+			const raw = localStorage.getItem(LOCAL_HABITS_KEY);
+			return raw ? (JSON.parse(raw) as HabitItem[]) : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function writeLocalHabits(next: HabitItem[]) {
+		localStorage.setItem(LOCAL_HABITS_KEY, JSON.stringify(next));
+	}
+
+	function readLocalCheckIns() {
+		try {
+			const raw = localStorage.getItem(LOCAL_CHECKINS_KEY);
+			return raw ? (JSON.parse(raw) as typeof checkIns) : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function writeLocalCheckIns(next: typeof checkIns) {
+		localStorage.setItem(LOCAL_CHECKINS_KEY, JSON.stringify(next));
+	}
+
 	onMount(() => {
 		void loadHabits();
 		void loadCheckIns();
@@ -41,18 +71,33 @@
 	});
 
 	async function loadHabits() {
-		habits.setLoading(true); habits.setError(null);
+		habits.setLoading(true);
+		habits.setError(null);
 		try {
 			const result = await apiRequest<{ items?: HabitItem[]; error?: string }>('/api/habits');
-			if (!result.ok) { habits.setError(result.error ?? 'Unable to load habits'); return; }
+			if (!result.ok) {
+				habits.setItems(readLocalHabits());
+				habits.setError('Using offline mode (local browser storage)');
+				return;
+			}
 			habits.setItems(result.data?.items ?? []);
-		} catch { habits.setError('Unable to load habits'); }
-		finally { habits.setLoading(false); }
+		} catch {
+			habits.setItems(readLocalHabits());
+			habits.setError('Using offline mode (local browser storage)');
+		} finally {
+			habits.setLoading(false);
+		}
 	}
 
 	async function loadCheckIns() {
-		const result = await apiRequest<{ items?: Array<{ id: string; createdAt: string; changes: { mood?: number; energy?: number; reflection?: string } }>; error?: string }>('/api/check-ins').catch(() => null);
-		if (!result || !result.ok) return;
+		const result = await apiRequest<{
+			items?: Array<{ id: string; createdAt: string; changes: { mood?: number; energy?: number; reflection?: string } }>;
+			error?: string;
+		}>('/api/check-ins').catch(() => null);
+		if (!result || !result.ok) {
+			checkIns = readLocalCheckIns();
+			return;
+		}
 		checkIns = result.data?.items ?? [];
 	}
 
@@ -60,9 +105,27 @@
 		event.preventDefault();
 		error = null;
 		const result = await apiRequest<{ item?: unknown; error?: string }>('/api/check-ins', {
-			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mood, energy, reflection: reflection || null })
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ mood, energy, reflection: reflection || null })
 		});
-		if (!result.ok) { error = result.error ?? 'Unable to submit check-in'; return; }
+		if (!result.ok) {
+			const entry: (typeof checkIns)[number] = {
+				id: crypto.randomUUID(),
+				createdAt: new Date().toISOString(),
+				changes: {
+					mood,
+					energy,
+					...(reflection ? { reflection } : {})
+				}
+			};
+			const next = [entry, ...readLocalCheckIns()];
+			writeLocalCheckIns(next);
+			checkIns = next;
+			error = 'Saved locally. Connect database to sync with server.';
+			reflection = '';
+			return;
+		}
 		reflection = '';
 		await loadCheckIns();
 	}
@@ -74,32 +137,107 @@
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ name, description: description || null, color, targetCount, frequency: 'DAILY' })
 		});
-		if (!result.ok) { habits.setError(result.error ?? 'Unable to create habit'); return; }
-		name = ''; description = ''; color = '#7F9C8A'; targetCount = 1;
+		if (!result.ok) {
+			const local: HabitItem = {
+				id: crypto.randomUUID(),
+				name,
+				description: description || null,
+				color,
+				frequency: 'DAILY',
+				targetCount,
+				streakCurrent: 0,
+				streakBest: 0,
+				lastCompletedDate: null,
+				logs: []
+			};
+			const next = [local, ...readLocalHabits()];
+			writeLocalHabits(next);
+			habits.setItems(next);
+			habits.setError('Saved locally. Connect database to sync with server.');
+			name = '';
+			description = '';
+			color = '#7F9C8A';
+			targetCount = 1;
+			return;
+		}
+		name = '';
+		description = '';
+		color = '#7F9C8A';
+		targetCount = 1;
 		await loadHabits();
 	}
 
 	async function logHabit(event: CustomEvent<string>) {
 		const result = await apiRequest<{ item?: HabitItem; error?: string }>(`/api/habits/${event.detail}/log`, {
-			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ count: 1 })
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ count: 1 })
 		});
-		if (!result.ok) { habits.setError(result.error ?? 'Unable to log habit'); return; }
+		if (!result.ok) {
+			const today = new Date().toISOString().slice(0, 10);
+			const next = readLocalHabits().map((item) => {
+				if (item.id !== event.detail) return item;
+				const streakCurrent = item.lastCompletedDate === today ? item.streakCurrent : item.streakCurrent + 1;
+				return {
+					...item,
+					lastCompletedDate: today,
+					streakCurrent,
+					streakBest: Math.max(item.streakBest, streakCurrent),
+					logs: [
+						...(item.logs ?? []),
+						{
+							id: crypto.randomUUID(),
+							completedDate: today,
+							count: 1,
+							notes: null
+						}
+					]
+				};
+			});
+			writeLocalHabits(next);
+			habits.setItems(next);
+			habits.setError('Saved locally. Connect database to sync with server.');
+			if (activeHabitId === event.detail) await loadStats(event.detail);
+			return;
+		}
 		await loadHabits();
 		if (activeHabitId === event.detail) await loadStats(event.detail);
 	}
 
 	async function deleteHabit(event: CustomEvent<string>) {
-		const ok = confirm('Delete this habit?'); if (!ok) return;
-		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/habits/${event.detail}`, { method: 'DELETE' });
-		if (!result.ok) { habits.setError(result.error ?? 'Unable to delete habit'); return; }
-		if (activeHabitId === event.detail) { activeHabitId = null; activeLogs = []; }
+		const ok = confirm('Delete this habit?');
+		if (!ok) return;
+		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/habits/${event.detail}`, {
+			method: 'DELETE'
+		});
+		if (!result.ok) {
+			const next = readLocalHabits().filter((item) => item.id !== event.detail);
+			writeLocalHabits(next);
+			habits.setItems(next);
+			habits.setError('Saved locally. Connect database to sync with server.');
+			if (activeHabitId === event.detail) {
+				activeHabitId = null;
+				activeLogs = [];
+			}
+			return;
+		}
+		if (activeHabitId === event.detail) {
+			activeHabitId = null;
+			activeLogs = [];
+		}
 		await loadHabits();
 	}
 
 	async function loadStats(habitId: string) {
 		const result = await apiRequest<{ logs?: HabitLogItem[]; error?: string }>(`/api/habits/${habitId}/stats`);
-		if (!result.ok) { habits.setError(result.error ?? 'Unable to load habit stats'); return; }
-		activeHabitId = habitId; activeLogs = result.data?.logs ?? [];
+		if (!result.ok) {
+			const localHabit = readLocalHabits().find((item) => item.id === habitId);
+			activeHabitId = habitId;
+			activeLogs = localHabit?.logs ?? [];
+			return;
+		}
+		activeHabitId = habitId;
+		activeLogs = result.data?.logs ?? [];
 	}
 </script>
 
@@ -119,8 +257,8 @@
 		<input bind:value={reflection} class="md:col-span-5 rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm" placeholder="Quick reflection" type="text" />
 		<button class="md:col-span-1 rounded-[14px] bg-primary px-3 py-2 text-sm font-semibold text-on-primary" type="submit">Log</button>
 		<div class="md:col-span-12 grid grid-cols-2 gap-2 text-xs">
-			<div class="muted-panel p-2">Mood trend: {moodTrend.join(' • ') || '-'}</div>
-			<div class="muted-panel p-2">Energy trend: {energyTrend.join(' • ') || '-'}</div>
+			<div class="muted-panel p-2">Mood trend: {moodTrend.join(' â€¢ ') || '-'}</div>
+			<div class="muted-panel p-2">Energy trend: {energyTrend.join(' â€¢ ') || '-'}</div>
 		</div>
 	</form>
 

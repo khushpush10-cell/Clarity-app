@@ -15,8 +15,22 @@
 	let targetValue = $state(10);
 	let color = $state('#7F9C8A');
 	let deadline = $state('');
+	const LOCAL_GOALS_KEY = 'clarity_local_goals_v1';
 
 	const colorPresets = ['#7F9C8A', '#8FB3A0', '#B7A6C9', '#C48A95'];
+
+	function readLocalGoals(): GoalItem[] {
+		try {
+			const raw = localStorage.getItem(LOCAL_GOALS_KEY);
+			return raw ? (JSON.parse(raw) as GoalItem[]) : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function writeLocalGoals(next: GoalItem[]) {
+		localStorage.setItem(LOCAL_GOALS_KEY, JSON.stringify(next));
+	}
 
 	onMount(() => { void loadGoals(); });
 
@@ -24,9 +38,16 @@
 		loading = true; error = null;
 		try {
 			const result = await apiRequest<{ items?: GoalItem[]; error?: string }>('/api/goals');
-			if (!result.ok) { error = result.error ?? 'Unable to load goals'; return; }
+			if (!result.ok) {
+				items = readLocalGoals();
+				error = 'Using offline mode (local browser storage)';
+				return;
+			}
 			items = result.data?.items ?? [];
-		} catch { error = 'Unable to load goals'; }
+		} catch {
+			items = readLocalGoals();
+			error = 'Using offline mode (local browser storage)';
+		}
 		finally { loading = false; }
 	}
 
@@ -36,7 +57,26 @@
 			method: 'POST', headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ title, description: description || null, targetMetric, currentValue: 0, targetValue, deadline: deadline ? new Date(deadline).toISOString() : null, color })
 		});
-		if (!result.ok) { error = result.error ?? 'Unable to create goal'; return; }
+		if (!result.ok) {
+			const now = new Date().toISOString();
+			const local: GoalItem = {
+				id: crypto.randomUUID(),
+				title,
+				description: description || null,
+				targetMetric,
+				currentValue: 0,
+				targetValue,
+				progressPercentage: 0,
+				deadline: deadline ? new Date(deadline).toISOString() : null,
+				color
+			};
+			const next = [local, ...readLocalGoals()];
+			writeLocalGoals(next);
+			items = next;
+			error = 'Saved locally. Connect database to sync with server.';
+			title = ''; description = ''; targetMetric = 'sessions'; targetValue = 10; deadline = ''; color = '#7F9C8A';
+			return;
+		}
 		title = ''; description = ''; targetMetric = 'sessions'; targetValue = 10; deadline = ''; color = '#7F9C8A';
 		await loadGoals();
 	}
@@ -47,7 +87,20 @@
 		const result = await apiRequest<{ item?: GoalItem; error?: string }>(`/api/goals/${event.detail.id}/update-progress`, {
 			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ currentValue: event.detail.currentValue, targetValue: item.targetValue })
 		});
-		if (!result.ok) { error = result.error ?? 'Unable to update goal'; return; }
+		if (!result.ok) {
+			const next = readLocalGoals().map((goal) => {
+				if (goal.id !== event.detail.id) return goal;
+				const progress = Math.max(
+					0,
+					Math.min(100, Math.round((event.detail.currentValue / goal.targetValue) * 100))
+				);
+				return { ...goal, currentValue: event.detail.currentValue, progressPercentage: progress };
+			});
+			writeLocalGoals(next);
+			items = next;
+			error = 'Saved locally. Connect database to sync with server.';
+			return;
+		}
 		await loadGoals();
 	}
 
@@ -55,7 +108,13 @@
 		error = null;
 		const ok = confirm('Delete this goal?'); if (!ok) return;
 		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/goals/${event.detail}`, { method: 'DELETE' });
-		if (!result.ok) { error = result.error ?? 'Unable to delete goal'; return; }
+		if (!result.ok) {
+			const next = readLocalGoals().filter((goal) => goal.id !== event.detail);
+			writeLocalGoals(next);
+			items = next;
+			error = 'Saved locally. Connect database to sync with server.';
+			return;
+		}
 		await loadGoals();
 	}
 </script>

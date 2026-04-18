@@ -1,5 +1,5 @@
-const CACHE_VERSION = 'clarity-v3';
-const APP_SHELL = ['/', '/dashboard', '/tasks', '/habits', '/goals', '/analytics', '/offline.html'];
+const CACHE_VERSION = 'clarity-v4';
+const APP_SHELL = ['/offline.html'];
 
 function isStaticAsset(request: Request) {
 	const url = new URL(request.url);
@@ -16,9 +16,7 @@ function isApiRequest(request: Request) {
 
 self.addEventListener('install', (event) => {
 	event.waitUntil(
-		caches.open(CACHE_VERSION).then((cache) => {
-			return cache.addAll(APP_SHELL);
-		})
+		caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL))
 	);
 	self.skipWaiting();
 });

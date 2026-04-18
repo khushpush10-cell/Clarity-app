@@ -14,6 +14,7 @@
 
 	let stats = $state({ totalMinutes: 0, totalSessions: 0, averageMinutes: 0 });
 	let timer: ReturnType<typeof setInterval> | null = null;
+	const LOCAL_FOCUS_STATS_KEY = 'clarity_local_focus_stats_v1';
 
 	const progressPercentage = $derived.by(() => {
 		const total = duration * 60;
@@ -33,17 +34,48 @@
 
 	onMount(() => {
 		void loadStats();
+		const onQuickStart = (event: Event) => {
+			const custom = event as CustomEvent<{ minutes?: number }>;
+			const minutes = custom.detail?.minutes;
+			if (typeof minutes === 'number' && [15, 25, 30, 45, 60].includes(minutes)) {
+				setDuration(minutes);
+			} else {
+				setDuration(25);
+			}
+			if (!running) {
+				void start();
+			}
+		};
+		window.addEventListener('clarity:focus-quick-start', onQuickStart);
 		return () => {
+			window.removeEventListener('clarity:focus-quick-start', onQuickStart);
 			if (timer) clearInterval(timer);
 		};
 	});
+
+	function readLocalStats() {
+		try {
+			const raw = localStorage.getItem(LOCAL_FOCUS_STATS_KEY);
+			return raw
+				? (JSON.parse(raw) as { totalMinutes: number; totalSessions: number; averageMinutes: number })
+				: { totalMinutes: 0, totalSessions: 0, averageMinutes: 0 };
+		} catch {
+			return { totalMinutes: 0, totalSessions: 0, averageMinutes: 0 };
+		}
+	}
+
+	function writeLocalStats(next: { totalMinutes: number; totalSessions: number; averageMinutes: number }) {
+		localStorage.setItem(LOCAL_FOCUS_STATS_KEY, JSON.stringify(next));
+	}
 
 	async function loadStats() {
 		const result = await apiRequest<{ totalMinutes?: number; totalSessions?: number; averageMinutes?: number; error?: string }>(
 			'/api/focus-sessions/stats'
 		).catch(() => null);
-		if (!result) return;
-		if (!result.ok) return;
+		if (!result || !result.ok) {
+			stats = readLocalStats();
+			return;
+		}
 		stats = {
 			totalMinutes: result.data?.totalMinutes ?? 0,
 			totalSessions: result.data?.totalSessions ?? 0,
@@ -61,10 +93,11 @@
 				body: JSON.stringify({ durationMinutes: duration })
 			});
 			if (!result.ok || !result.data?.item?.id) {
-				error = result.error ?? 'Unable to start focus session';
-				return;
+				activeSessionId = `local-${crypto.randomUUID()}`;
+				error = 'Running in offline mode (local browser storage)';
+			} else {
+				activeSessionId = result.data.item.id;
 			}
-			activeSessionId = result.data.item.id;
 			remainingSeconds = duration * 60;
 			running = true;
 			if (timer) clearInterval(timer);
@@ -97,7 +130,18 @@
 				body: JSON.stringify({ interruptions: 0 })
 			});
 			if (!result.ok) {
-				error = result.error ?? 'Unable to complete focus session';
+				const current = readLocalStats();
+				const next = {
+					totalMinutes: current.totalMinutes + duration,
+					totalSessions: current.totalSessions + 1,
+					averageMinutes: Math.round(
+						(current.totalMinutes + duration) / Math.max(1, current.totalSessions + 1)
+					)
+				};
+				writeLocalStats(next);
+				stats = next;
+				error = 'Saved locally. Connect database to sync with server.';
+				activeSessionId = null;
 				return;
 			}
 			activeSessionId = null;
