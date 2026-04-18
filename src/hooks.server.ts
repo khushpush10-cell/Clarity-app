@@ -60,14 +60,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.requestId = randomUUID();
 	event.locals.user = null;
 
-	if (event.url.pathname.startsWith('/maintenance')) {
-		throw redirect(302, '/dashboard');
-	}
-
 	const authDisabled = true;
-	const maintenance = false;
+	const maintenance = env.MAINTENANCE_MODE === '1';
 	if (maintenance && event.url.pathname !== '/maintenance' && !event.url.pathname.startsWith('/api/health')) {
 		throw redirect(302, '/maintenance');
+	}
+	if (!maintenance && event.url.pathname === '/maintenance') {
+		throw redirect(302, '/dashboard');
 	}
 
 	if (event.url.pathname.startsWith('/api') && isStateChanging(event.request.method)) {
