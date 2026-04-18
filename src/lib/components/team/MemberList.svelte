@@ -15,20 +15,52 @@
 	let items = $state([] as TeamMemberItem[]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+	const LOCAL_TEAM_KEY = 'clarity_local_team_v1';
 
 	const dispatch = createEventDispatcher<{ changed: void }>();
 
 	onMount(() => { void loadMembers(); });
 	$effect(() => { if (workspaceId) void loadMembers(); });
 
+	function readLocalMembers() {
+		if (!workspaceId) return [];
+		try {
+			const raw = localStorage.getItem(LOCAL_TEAM_KEY);
+			if (!raw) return [];
+			const parsed = JSON.parse(raw) as {
+				membersByWorkspace?: Record<
+					string,
+					Array<{ userId: string; role: string; user: { name: string } }>
+				>;
+			};
+			const fromWorkspace = parsed.membersByWorkspace?.[workspaceId] ?? [];
+			return fromWorkspace.map((entry) => ({
+				userId: entry.userId,
+				name: entry.user?.name ?? entry.userId,
+				email: '-',
+				role: entry.role,
+				joinedAt: new Date().toISOString()
+			}));
+		} catch {
+			return [];
+		}
+	}
+
 	async function loadMembers() {
 		if (!workspaceId) { items = []; return; }
 		loading = true; error = null;
 		try {
 			const result = await apiRequest<{ items?: Array<{ userId: string; role: string; joinedAt: string; user?: { name?: string; email?: string } }>; error?: string; }>(`/api/workspaces/${workspaceId}/members`);
-			if (!result.ok) { error = result.error ?? 'Unable to load members'; return; }
+			if (!result.ok) {
+				items = readLocalMembers();
+				error = 'Using offline mode (local browser storage)';
+				return;
+			}
 			items = (result.data?.items ?? []).map((entry) => ({ userId: entry.userId, name: entry.user?.name ?? 'Unknown', email: entry.user?.email ?? '-', role: entry.role, joinedAt: entry.joinedAt }));
-		} catch { error = 'Unable to load members'; }
+		} catch {
+			items = readLocalMembers();
+			error = 'Using offline mode (local browser storage)';
+		}
 		finally { loading = false; }
 	}
 

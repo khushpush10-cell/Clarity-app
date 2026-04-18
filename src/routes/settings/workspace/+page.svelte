@@ -10,21 +10,54 @@
 	let name = $state('');
 	let type = $state('TEAM');
 	let error = $state<string | null>(null);
+	const LOCAL_TEAM_KEY = 'clarity_local_team_v1';
 
 	onMount(() => {
 		void loadWorkspaces();
 	});
+
+	function readLocalWorkspaces() {
+		try {
+			const raw = localStorage.getItem(LOCAL_TEAM_KEY);
+			if (!raw) return [] as Array<{ id: string; name: string; type: string }>;
+			const parsed = JSON.parse(raw) as { workspaces?: Array<{ id: string; name: string; type: string }> };
+			return parsed.workspaces ?? [];
+		} catch {
+			return [] as Array<{ id: string; name: string; type: string }>;
+		}
+	}
+
+	function writeLocalWorkspaces(next: Array<{ id: string; name: string; type: string }>) {
+		try {
+			const raw = localStorage.getItem(LOCAL_TEAM_KEY);
+			const parsed = raw
+				? (JSON.parse(raw) as {
+						workspaces?: Array<{ id: string; name: string; type: string }>;
+						membersByWorkspace?: Record<string, unknown>;
+					})
+				: {};
+			localStorage.setItem(
+				LOCAL_TEAM_KEY,
+				JSON.stringify({
+					...parsed,
+					workspaces: next
+				})
+			);
+		} catch {
+			localStorage.setItem(LOCAL_TEAM_KEY, JSON.stringify({ workspaces: next, membersByWorkspace: {} }));
+		}
+	}
 
 	async function loadWorkspaces() {
 		const result = await apiRequest<{ items?: Array<{ id: string; name: string; type: string }>; error?: string }>(
 			'/api/workspaces'
 		);
 		if (!result.ok) {
-			error = result.error ?? 'Unable to load workspaces';
-			return;
+			workspaces = readLocalWorkspaces();
+			error = 'Using offline mode (local browser storage)';
+		} else {
+			workspaces = result.data?.items ?? [];
 		}
-
-		workspaces = result.data?.items ?? [];
 		if (!selectedWorkspaceId) {
 			const first = workspaces.at(0);
 			if (first) {
@@ -53,7 +86,12 @@
 			body: JSON.stringify({ name, type })
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to save workspace';
+			const next = workspaces.map((workspace) =>
+				workspace.id === selectedWorkspaceId ? { ...workspace, name, type } : workspace
+			);
+			workspaces = next;
+			writeLocalWorkspaces(next);
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 
@@ -75,7 +113,11 @@
 			method: 'DELETE'
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to delete workspace';
+			const next = workspaces.filter((workspace) => workspace.id !== selectedWorkspaceId);
+			writeLocalWorkspaces(next);
+			workspaces = next;
+			selectedWorkspaceId = null;
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 

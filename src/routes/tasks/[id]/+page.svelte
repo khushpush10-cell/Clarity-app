@@ -28,10 +28,44 @@
 	let attachments = $state([] as Array<{ id: string; name: string; url: string; createdAt: string }>);
 	let attachmentName = $state('');
 	let attachmentUrl = $state('');
+	const LOCAL_TASKS_KEY = 'clarity_local_tasks_v1';
+	const LOCAL_COMMENTS_KEY = 'clarity_local_task_comments_v1';
+	const LOCAL_ATTACHMENTS_KEY = 'clarity_local_task_attachments_v1';
+	const LOCAL_ACTIVITY_KEY = 'clarity_local_task_activity_v1';
 
 	onMount(async () => {
 		await Promise.all([loadTask(), loadActivity(), loadAttachments()]);
 	});
+
+	function readLocalTasks() {
+		try {
+			const raw = localStorage.getItem(LOCAL_TASKS_KEY);
+			return raw
+				? (JSON.parse(raw) as Array<{
+						id: string;
+						title: string;
+						description: string | null;
+						status: string;
+						priority: string;
+					}>)
+				: [];
+		} catch {
+			return [];
+		}
+	}
+
+	function readLocalMap<T>(key: string): Record<string, T[]> {
+		try {
+			const raw = localStorage.getItem(key);
+			return raw ? (JSON.parse(raw) as Record<string, T[]>) : {};
+		} catch {
+			return {};
+		}
+	}
+
+	function writeLocalMap<T>(key: string, next: Record<string, T[]>) {
+		localStorage.setItem(key, JSON.stringify(next));
+	}
 
 	async function loadTask() {
 		loading = true;
@@ -49,13 +83,25 @@
 			}>(`/api/tasks/${params.id}`);
 
 			if (!result.ok || !result.data?.item) {
+				const local = readLocalTasks().find((task) => task.id === params.id) ?? null;
+				if (local) {
+					item = local;
+					error = 'Using offline mode (local browser storage)';
+					return;
+				}
 				error = result.error ?? 'Unable to load task';
 				return;
 			}
 
 			item = result.data.item;
 		} catch {
-			error = 'Unable to load task';
+			const local = readLocalTasks().find((task) => task.id === params.id) ?? null;
+			if (local) {
+				item = local;
+				error = 'Using offline mode (local browser storage)';
+			} else {
+				error = 'Unable to load task';
+			}
 		} finally {
 			loading = false;
 		}
@@ -67,7 +113,13 @@
 			audit?: Array<{ id: string; action: string; createdAt: string; user: { name: string; avatarUrl: string | null } }>;
 			error?: string;
 		}>(`/api/tasks/${params.id}/activity`);
-		if (!result.ok) return;
+		if (!result.ok) {
+			const localComments = readLocalMap<(typeof comments)[number]>(LOCAL_COMMENTS_KEY);
+			const localActivity = readLocalMap<(typeof activity)[number]>(LOCAL_ACTIVITY_KEY);
+			comments = localComments[params.id] ?? [];
+			activity = localActivity[params.id] ?? [];
+			return;
+		}
 
 		comments = result.data?.comments ?? [];
 		activity = result.data?.audit ?? [];
@@ -77,7 +129,11 @@
 		const result = await apiRequest<{ items?: typeof attachments; error?: string }>(
 			`/api/tasks/${params.id}/attachments`
 		);
-		if (!result.ok) return;
+		if (!result.ok) {
+			const localAttachments = readLocalMap<(typeof attachments)[number]>(LOCAL_ATTACHMENTS_KEY);
+			attachments = localAttachments[params.id] ?? [];
+			return;
+		}
 		attachments = result.data?.items ?? [];
 	}
 
@@ -92,7 +148,29 @@
 			body: JSON.stringify({ content })
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to add comment';
+			const localComments = readLocalMap<(typeof comments)[number]>(LOCAL_COMMENTS_KEY);
+			const localActivity = readLocalMap<(typeof activity)[number]>(LOCAL_ACTIVITY_KEY);
+			const createdAt = new Date().toISOString();
+			const commentItem = {
+				id: crypto.randomUUID(),
+				content,
+				createdAt,
+				user: { name: 'You', avatarUrl: null }
+			};
+			const auditItem = {
+				id: crypto.randomUUID(),
+				action: 'Comment added',
+				createdAt,
+				user: { name: 'You', avatarUrl: null }
+			};
+			const nextComments = [commentItem, ...(localComments[params.id] ?? [])];
+			const nextAudit = [auditItem, ...(localActivity[params.id] ?? [])];
+			writeLocalMap(LOCAL_COMMENTS_KEY, { ...localComments, [params.id]: nextComments });
+			writeLocalMap(LOCAL_ACTIVITY_KEY, { ...localActivity, [params.id]: nextAudit });
+			comments = nextComments;
+			activity = nextAudit;
+			error = 'Saved locally. Connect database to sync with server.';
+			newComment = '';
 			return;
 		}
 
@@ -112,7 +190,19 @@
 			body: JSON.stringify({ name, url })
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to add attachment';
+			const localAttachments = readLocalMap<(typeof attachments)[number]>(LOCAL_ATTACHMENTS_KEY);
+			const created = {
+				id: crypto.randomUUID(),
+				name,
+				url,
+				createdAt: new Date().toISOString()
+			};
+			const next = [created, ...(localAttachments[params.id] ?? [])];
+			writeLocalMap(LOCAL_ATTACHMENTS_KEY, { ...localAttachments, [params.id]: next });
+			attachments = next;
+			error = 'Saved locally. Connect database to sync with server.';
+			attachmentName = '';
+			attachmentUrl = '';
 			return;
 		}
 
