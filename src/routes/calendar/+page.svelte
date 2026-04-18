@@ -3,12 +3,48 @@
 
 	import MainLayout from '$lib/components/layout/MainLayout.svelte';
 	import CalendarView from '$lib/components/tasks/CalendarView.svelte';
-	import type { TaskItem } from '$lib/stores/tasks';
+	import type { TaskItem, TaskStatusUi } from '$lib/stores/tasks';
 	import { apiRequest } from '$lib/utils/http';
 
 	let items = $state([] as TaskItem[]);
 	let loading = $state(false);
 	let error = $state<string | null>(null);
+	const LOCAL_TASKS_KEY = 'clarity_local_tasks_v1';
+
+	function readLocalTasks(): TaskItem[] {
+		try {
+			const raw = localStorage.getItem(LOCAL_TASKS_KEY);
+			return raw ? (JSON.parse(raw) as TaskItem[]) : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function writeLocalTasks(next: TaskItem[]) {
+		localStorage.setItem(LOCAL_TASKS_KEY, JSON.stringify(next));
+	}
+
+	function makeLocalTask(input: { title: string; dueDate: string | null }): TaskItem {
+		const now = new Date().toISOString();
+		return {
+			id: crypto.randomUUID(),
+			workspaceId: 'local-workspace',
+			creatorId: 'local-user',
+			assigneeId: null,
+			title: input.title,
+			description: null,
+			status: 'TODO',
+			priority: 'MEDIUM',
+			dueDate: input.dueDate,
+			dueTime: null,
+			completedAt: null,
+			colorTag: null,
+			parentTaskId: null,
+			createdAt: now,
+			updatedAt: now,
+			position: readLocalTasks().length + 1
+		};
+	}
 
 	onMount(() => {
 		void loadTasks();
@@ -21,13 +57,15 @@
 		try {
 			const result = await apiRequest<{ items?: TaskItem[]; error?: string }>('/api/tasks?pageSize=100');
 			if (!result.ok) {
-				error = result.error ?? 'Unable to load tasks';
+				items = readLocalTasks();
+				error = 'Using offline mode (local browser storage)';
 				return;
 			}
 
 			items = result.data?.items ?? [];
 		} catch {
-			error = 'Unable to load tasks';
+			items = readLocalTasks();
+			error = 'Using offline mode (local browser storage)';
 		} finally {
 			loading = false;
 		}
@@ -36,7 +74,15 @@
 	async function completeTask(event: CustomEvent<string>) {
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${event.detail}/complete`, { method: 'POST' });
 		if (!result.ok) {
-			error = result.error ?? 'Unable to complete task';
+			const now = new Date().toISOString();
+			const next = readLocalTasks().map((item) =>
+				item.id === event.detail
+					? { ...item, status: 'DONE' as TaskStatusUi, completedAt: now, updatedAt: now }
+					: item
+			);
+			writeLocalTasks(next);
+			items = next;
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 		await loadTasks();
@@ -45,7 +91,23 @@
 	async function duplicateTask(event: CustomEvent<string>) {
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${event.detail}/duplicate`, { method: 'POST' });
 		if (!result.ok) {
-			error = result.error ?? 'Unable to duplicate task';
+			const source = items.find((item) => item.id === event.detail);
+			if (!source) return;
+			const now = new Date().toISOString();
+			const copy: TaskItem = {
+				...source,
+				id: crypto.randomUUID(),
+				title: `${source.title} (Copy)`,
+				status: 'TODO',
+				completedAt: null,
+				createdAt: now,
+				updatedAt: now,
+				position: readLocalTasks().length + 1
+			};
+			const next = [copy, ...readLocalTasks()];
+			writeLocalTasks(next);
+			items = next;
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 		await loadTasks();
@@ -57,7 +119,10 @@
 
 		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/tasks/${event.detail}`, { method: 'DELETE' });
 		if (!result.ok) {
-			error = result.error ?? 'Unable to delete task';
+			const next = readLocalTasks().filter((item) => item.id !== event.detail);
+			writeLocalTasks(next);
+			items = next;
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 		await loadTasks();
@@ -73,7 +138,13 @@
 			body: JSON.stringify({ title: nextTitle })
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to edit task';
+			const now = new Date().toISOString();
+			const next = readLocalTasks().map((item) =>
+				item.id === event.detail.id ? { ...item, title: nextTitle, updatedAt: now } : item
+			);
+			writeLocalTasks(next);
+			items = next;
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 		await loadTasks();
@@ -91,7 +162,11 @@
 			})
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to create task';
+			const local = makeLocalTask({ title: event.detail.title, dueDate: event.detail.dueDate });
+			const next = [local, ...readLocalTasks()];
+			writeLocalTasks(next);
+			items = next;
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 		await loadTasks();
@@ -104,7 +179,13 @@
 			body: JSON.stringify({ dueDate: event.detail.dueDate })
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to reschedule task';
+			const now = new Date().toISOString();
+			const next = readLocalTasks().map((item) =>
+				item.id === event.detail.id ? { ...item, dueDate: event.detail.dueDate, updatedAt: now } : item
+			);
+			writeLocalTasks(next);
+			items = next;
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 		await loadTasks();

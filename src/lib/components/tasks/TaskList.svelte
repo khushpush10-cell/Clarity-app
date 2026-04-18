@@ -215,7 +215,18 @@
 			method: 'POST', headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ title: template.title, description: template.description, priority: template.priority })
 		});
-		if (!result.ok) { tasks.setError(result.error ?? 'Unable to create task from template'); return; }
+		if (!result.ok) {
+			const local = makeLocalTask({
+				title: template.title,
+				description: template.description,
+				priority: template.priority,
+				dueDate: null
+			});
+			upsertLocalTask(local);
+			tasks.setItems([local, ...items]);
+			tasks.setError('Saved locally. Connect database to sync with server.');
+			return;
+		}
 		notifications.push({ id: crypto.randomUUID(), type: 'success', title: 'Template applied', message: `Task created from ${template.title}` });
 		await loadTasks();
 	}
@@ -236,7 +247,21 @@
 		const payload: { workspaceId?: string; name: string; search: string; statusFilter: TaskStatusUi | 'ALL'; priorityFilter: TaskPriorityUi | 'ALL'; } = { name, search, statusFilter, priorityFilter };
 		if (currentWorkspaceId) payload.workspaceId = currentWorkspaceId;
 		const result = await apiRequest<{ item?: FilterPresetApiItem; error?: string }>('/api/tasks/filter-presets', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-		if (!result.ok || !result.data?.item) { tasks.setError(result.error ?? 'Unable to save filter preset'); return; }
+		if (!result.ok || !result.data?.item) {
+			presets = [
+				{
+					id: crypto.randomUUID(),
+					name,
+					search,
+					statusFilter,
+					priorityFilter
+				},
+				...presets
+			];
+			persistPresetsLocal();
+			tasks.setError('Saved locally. Connect database to sync with server.');
+			return;
+		}
 		const item = result.data.item;
 		presets = [{ id: item.id, name: item.name, search: item.search, statusFilter: item.statusFilter, priorityFilter: item.priorityFilter }, ...presets];
 		persistPresetsLocal();
@@ -252,7 +277,12 @@
 	async function deletePreset(presetId: string) {
 		const workspaceQuery = currentWorkspaceId ? `?workspaceId=${encodeURIComponent(currentWorkspaceId)}` : '';
 		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/tasks/filter-presets/${presetId}${workspaceQuery}`, { method: 'DELETE' });
-		if (!result.ok) { tasks.setError(result.error ?? 'Unable to delete preset'); return; }
+		if (!result.ok) {
+			presets = presets.filter((candidate: FilterPreset) => candidate.id !== presetId);
+			persistPresetsLocal();
+			tasks.setError('Updated locally. Connect database to sync with server.');
+			return;
+		}
 		presets = presets.filter((candidate: FilterPreset) => candidate.id !== presetId);
 		persistPresetsLocal();
 	}
@@ -425,7 +455,18 @@
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>('/api/tasks', {
 			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: event.detail.title, description: null, priority: 'MEDIUM', dueDate: event.detail.dueDate })
 		});
-		if (!result.ok) { tasks.setError(result.error ?? 'Unable to create task'); return; }
+		if (!result.ok) {
+			const local = makeLocalTask({
+				title: event.detail.title,
+				description: null,
+				priority: 'MEDIUM',
+				dueDate: event.detail.dueDate
+			});
+			upsertLocalTask(local);
+			tasks.setItems([local, ...items]);
+			tasks.setError('Saved locally. Connect database to sync with server.');
+			return;
+		}
 		await loadTasks();
 	}
 	async function rescheduleTask(event: CustomEvent<{ id: string; dueDate: string | null }>) { await patchTask(event.detail.id, { dueDate: event.detail.dueDate }); }

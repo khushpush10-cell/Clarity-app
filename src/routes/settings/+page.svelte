@@ -16,6 +16,12 @@
 	};
 
 	const NOTIFY_STORAGE_KEY = 'clarity_notification_preferences';
+	const LOCAL_PROFILE_KEY = 'clarity_local_profile_v1';
+	const LOCAL_SETTINGS_SESSIONS_KEY = 'clarity_local_sessions_v1';
+	const LOCAL_SECURITY_KEY = 'clarity_local_security_v1';
+	const LOCAL_GOALS_KEY = 'clarity_local_goals_v1';
+	const LOCAL_HABITS_KEY = 'clarity_local_habits_v1';
+	const LOCAL_TASKS_KEY = 'clarity_local_tasks_v1';
 
 	let loading = $state(false);
 	let saving = $state(false);
@@ -54,6 +60,63 @@
 		analytics: false
 	});
 
+	function readLocalProfile() {
+		try {
+			const raw = localStorage.getItem(LOCAL_PROFILE_KEY);
+			if (!raw) return null;
+			return JSON.parse(raw) as typeof profile;
+		} catch {
+			return null;
+		}
+	}
+
+	function writeLocalProfile(next: typeof profile) {
+		localStorage.setItem(LOCAL_PROFILE_KEY, JSON.stringify(next));
+	}
+
+	function readLocalSessions() {
+		try {
+			const raw = localStorage.getItem(LOCAL_SETTINGS_SESSIONS_KEY);
+			return raw ? (JSON.parse(raw) as typeof sessions) : [];
+		} catch {
+			return [];
+		}
+	}
+
+	function writeLocalSessions(next: typeof sessions) {
+		localStorage.setItem(LOCAL_SETTINGS_SESSIONS_KEY, JSON.stringify(next));
+	}
+
+	function readLocalSecurity() {
+		try {
+			const raw = localStorage.getItem(LOCAL_SECURITY_KEY);
+			if (!raw) return { twoFactorEnabled: false, backupCodes: [] as string[] };
+			return JSON.parse(raw) as { twoFactorEnabled: boolean; backupCodes: string[] };
+		} catch {
+			return { twoFactorEnabled: false, backupCodes: [] as string[] };
+		}
+	}
+
+	function writeLocalSecurity(next: { twoFactorEnabled: boolean; backupCodes: string[] }) {
+		localStorage.setItem(LOCAL_SECURITY_KEY, JSON.stringify(next));
+	}
+
+	function getLocalCounts() {
+		const parseCount = (key: string) => {
+			try {
+				const raw = localStorage.getItem(key);
+				return raw ? (JSON.parse(raw) as unknown[]).length : 0;
+			} catch {
+				return 0;
+			}
+		};
+		return {
+			tasks: parseCount(LOCAL_TASKS_KEY),
+			habits: parseCount(LOCAL_HABITS_KEY),
+			goals: parseCount(LOCAL_GOALS_KEY)
+		};
+	}
+
 	onMount(() => {
 		autoLogoutMinutes = Number(localStorage.getItem('clarity_auto_logout_minutes') ?? '120');
 		themeChoice = (localStorage.getItem('clarity_theme') as ThemeChoice) ?? 'light';
@@ -70,6 +133,17 @@
 				// Ignore malformed local data
 			}
 		}
+		const localProfile = readLocalProfile();
+		if (localProfile) {
+			profile = localProfile;
+		}
+		const localSessions = readLocalSessions();
+		if (localSessions.length > 0) {
+			sessions = localSessions;
+		}
+		const localSecurity = readLocalSecurity();
+		twoFactorEnabled = localSecurity.twoFactorEnabled;
+		backupCodes = localSecurity.backupCodes;
 
 		void loadMe();
 		void loadSessions();
@@ -82,7 +156,13 @@
 			'/api/users/me'
 		);
 		if (!result.ok || !result.data?.user) {
-			error = result.error ?? 'Unable to load profile';
+			const local = readLocalProfile();
+			if (local) {
+				profile = local;
+				error = 'Using offline mode (local browser storage)';
+			} else {
+				error = result.error ?? 'Unable to load profile';
+			}
 			loading = false;
 			return;
 		}
@@ -92,13 +172,18 @@
 			email: result.data.user.email,
 			avatarUrl: result.data.user.avatarUrl ?? ''
 		};
+		writeLocalProfile(profile);
 		loading = false;
 	}
 
 	async function loadSessions() {
 		const result = await apiRequest<{ sessions?: typeof sessions; error?: string }>('/api/users/sessions');
-		if (!result.ok) return;
+		if (!result.ok) {
+			sessions = readLocalSessions();
+			return;
+		}
 		sessions = result.data?.sessions ?? [];
+		writeLocalSessions(sessions);
 	}
 
 	async function saveProfile(event: SubmitEvent) {
@@ -116,7 +201,8 @@
 		});
 
 		if (!result.ok) {
-			error = result.error ?? 'Unable to save profile';
+			writeLocalProfile(profile);
+			error = 'Saved locally. Connect database to sync with server.';
 			saving = false;
 			return;
 		}
@@ -135,7 +221,10 @@
 			method: 'DELETE'
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to remove session';
+			const next = readLocalSessions().filter((session) => session.id !== sessionId);
+			writeLocalSessions(next);
+			sessions = next;
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 		await loadSessions();
@@ -146,7 +235,9 @@
 			method: 'DELETE'
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to logout other sessions';
+			writeLocalSessions([]);
+			sessions = [];
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 
@@ -164,12 +255,21 @@
 			method: 'POST'
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to enable 2FA';
+			twoFactorEnabled = true;
+			backupCodes = [
+				crypto.randomUUID().slice(0, 8),
+				crypto.randomUUID().slice(0, 8),
+				crypto.randomUUID().slice(0, 8),
+				crypto.randomUUID().slice(0, 8)
+			];
+			writeLocalSecurity({ twoFactorEnabled, backupCodes });
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 
 		twoFactorEnabled = true;
 		backupCodes = result.data?.backupCodes ?? [];
+		writeLocalSecurity({ twoFactorEnabled, backupCodes });
 	}
 
 	async function disable2fa() {
@@ -177,18 +277,35 @@
 			method: 'POST'
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to disable 2FA';
+			twoFactorEnabled = false;
+			backupCodes = [];
+			writeLocalSecurity({ twoFactorEnabled, backupCodes });
+			error = 'Saved locally. Connect database to sync with server.';
 			return;
 		}
 
 		twoFactorEnabled = false;
 		backupCodes = [];
+		writeLocalSecurity({ twoFactorEnabled, backupCodes });
 	}
 
 	async function exportData() {
 		const result = await apiRequest<Record<string, unknown>>(`/api/data/export?format=${exportFormat}`);
 		if (!result.ok || !result.data) {
-			error = result.error ?? 'Unable to export data';
+			const fallback = {
+				format: exportFormat,
+				exportedAt: new Date().toISOString(),
+				localCounts: getLocalCounts()
+			};
+			const content = JSON.stringify(fallback, null, 2);
+			await navigator.clipboard.writeText(content);
+			notifications.push({
+				id: crypto.randomUUID(),
+				type: 'success',
+				title: 'Local export copied',
+				message: 'Local browser data summary copied to clipboard.'
+			});
+			error = 'Using offline export (local browser storage)';
 			return;
 		}
 
@@ -222,7 +339,24 @@
 			}
 		);
 		if (!result.ok) {
-			error = result.error ?? 'Unable to import data';
+			const data = payload as {
+				tasks?: unknown[];
+				habits?: unknown[];
+				goals?: unknown[];
+				profile?: typeof profile;
+			};
+			if (Array.isArray(data.tasks)) localStorage.setItem(LOCAL_TASKS_KEY, JSON.stringify(data.tasks));
+			if (Array.isArray(data.habits)) localStorage.setItem(LOCAL_HABITS_KEY, JSON.stringify(data.habits));
+			if (Array.isArray(data.goals)) localStorage.setItem(LOCAL_GOALS_KEY, JSON.stringify(data.goals));
+			if (data.profile) writeLocalProfile(data.profile);
+			notifications.push({
+				id: crypto.randomUUID(),
+				type: 'success',
+				title: 'Imported locally',
+				message: 'Import saved to browser storage.'
+			});
+			error = 'Using offline import (local browser storage)';
+			importText = '';
 			return;
 		}
 
@@ -290,7 +424,13 @@
 			method: 'DELETE'
 		});
 		if (!result.ok) {
-			error = result.error ?? 'Unable to delete account';
+			localStorage.removeItem(LOCAL_PROFILE_KEY);
+			localStorage.removeItem(LOCAL_SETTINGS_SESSIONS_KEY);
+			localStorage.removeItem(LOCAL_SECURITY_KEY);
+			localStorage.removeItem(LOCAL_TASKS_KEY);
+			localStorage.removeItem(LOCAL_HABITS_KEY);
+			localStorage.removeItem(LOCAL_GOALS_KEY);
+			error = 'Deleted local data. Connect database to sync account removal.';
 			return;
 		}
 
