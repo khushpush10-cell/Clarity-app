@@ -18,10 +18,9 @@ function createPrismaClient(): PrismaClient {
 
 	const slowQueryMs = Number(env.LOG_SLOW_QUERIES_MS ?? '0');
 	if (slowQueryMs > 0 && !globalForPrisma.prismaSlowQueryHooked) {
-		const onQuery = client.$on as unknown as (event: string, cb: (e: any) => void) => void;
-		onQuery('query', (event) => {
+		client.$on('query', (event) => {
 			if (event.duration >= slowQueryMs) {
-				console.warn(`[slow-query] ${event.model}.${event.action} ${event.duration}ms`);
+				console.warn(`[slow-query] ${event.duration}ms ${event.query}`);
 			}
 		});
 		globalForPrisma.prismaSlowQueryHooked = true;
