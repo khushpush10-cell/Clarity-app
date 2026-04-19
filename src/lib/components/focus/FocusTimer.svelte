@@ -15,6 +15,7 @@
 	let stats = $state({ totalMinutes: 0, totalSessions: 0, averageMinutes: 0 });
 	let timer: ReturnType<typeof setInterval> | null = null;
 	const LOCAL_FOCUS_STATS_KEY = 'clarity_local_focus_stats_v1';
+	const LOCAL_FOCUS_SESSIONS_KEY = 'clarity_local_focus_sessions_v1';
 
 	const progressPercentage = $derived.by(() => {
 		const total = duration * 60;
@@ -66,6 +67,19 @@
 
 	function writeLocalStats(next: { totalMinutes: number; totalSessions: number; averageMinutes: number }) {
 		localStorage.setItem(LOCAL_FOCUS_STATS_KEY, JSON.stringify(next));
+	}
+
+	function appendLocalSession(session: { startedAt: string; durationMinutes: number; interruptions: number }) {
+		try {
+			const raw = localStorage.getItem(LOCAL_FOCUS_SESSIONS_KEY);
+			const current = raw
+				? (JSON.parse(raw) as Array<{ startedAt: string; durationMinutes: number; interruptions: number }>)
+				: [];
+			const next = [session, ...current].slice(0, 120);
+			localStorage.setItem(LOCAL_FOCUS_SESSIONS_KEY, JSON.stringify(next));
+		} catch {
+			// Ignore malformed local data
+		}
 	}
 
 	async function loadStats() {
@@ -139,11 +153,21 @@
 					)
 				};
 				writeLocalStats(next);
+				appendLocalSession({
+					startedAt: new Date().toISOString(),
+					durationMinutes: duration,
+					interruptions: 0
+				});
 				stats = next;
 				error = 'Saved locally. Connect database to sync with server.';
 				activeSessionId = null;
 				return;
 			}
+			appendLocalSession({
+				startedAt: new Date().toISOString(),
+				durationMinutes: duration,
+				interruptions: 0
+			});
 			activeSessionId = null;
 			await loadStats();
 		} catch {

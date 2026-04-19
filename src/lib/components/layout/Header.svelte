@@ -11,21 +11,80 @@
 	let notifications = $state(
 		[] as Array<{ id: string; title: string; message: string; read: boolean; link: string | null }>
 	);
+	const LOCAL_NOTIFICATIONS_KEY = 'clarity_local_notifications_v1';
 
 	onMount(() => {
+		const localItems = readLocalNotifications();
+		if (localItems.length > 0) {
+			notifications = localItems;
+			unread = localItems.filter((item) => !item.read).length;
+		}
 		void loadNotifications();
 	});
 
+	function readLocalNotifications() {
+		try {
+			const raw = localStorage.getItem(LOCAL_NOTIFICATIONS_KEY);
+			return raw
+				? (JSON.parse(raw) as Array<{ id: string; title: string; message: string; read: boolean; link: string | null }>)
+				: [];
+		} catch {
+			return [];
+		}
+	}
+
+	function writeLocalNotifications(
+		items: Array<{ id: string; title: string; message: string; read: boolean; link: string | null }>
+	) {
+		localStorage.setItem(LOCAL_NOTIFICATIONS_KEY, JSON.stringify(items));
+	}
+
 	async function loadNotifications() {
 		const result = await apiRequest<{ items?: typeof notifications; unread?: number; error?: string }>('/api/notifications');
-		if (!result.ok) return;
+		if (!result.ok) {
+			const local = readLocalNotifications();
+			if (local.length === 0) {
+				const seeded = [
+					{
+						id: crypto.randomUUID(),
+						title: 'Welcome to Clarity',
+						message: 'Create your first task, habit, and goal to build momentum.',
+						read: false,
+						link: '/dashboard'
+					},
+					{
+						id: crypto.randomUUID(),
+						title: 'Tip',
+						message: 'Use J/K to quickly navigate between sections.',
+						read: false,
+						link: '/tasks'
+					}
+				];
+				notifications = seeded;
+				unread = seeded.length;
+				writeLocalNotifications(seeded);
+				return;
+			}
+			notifications = local;
+			unread = local.filter((item) => !item.read).length;
+			return;
+		}
 
 		notifications = result.data?.items ?? [];
 		unread = result.data?.unread ?? 0;
+		writeLocalNotifications(notifications);
 	}
 
 	async function openNotification(item: { id: string; link: string | null }) {
-		await apiRequest(`/api/notifications/${item.id}/read`, { method: 'POST' });
+		const result = await apiRequest(`/api/notifications/${item.id}/read`, { method: 'POST' });
+		if (!result.ok) {
+			const next = readLocalNotifications().map((entry) =>
+				entry.id === item.id ? { ...entry, read: true } : entry
+			);
+			notifications = next;
+			unread = next.filter((entry) => !entry.read).length;
+			writeLocalNotifications(next);
+		}
 		notificationOpen = false;
 		await loadNotifications();
 		if (item.link) {
@@ -34,7 +93,14 @@
 	}
 
 	async function readAll() {
-		await apiRequest('/api/notifications/read-all', { method: 'POST' });
+		const result = await apiRequest('/api/notifications/read-all', { method: 'POST' });
+		if (!result.ok) {
+			const next = readLocalNotifications().map((entry) => ({ ...entry, read: true }));
+			notifications = next;
+			unread = 0;
+			writeLocalNotifications(next);
+			return;
+		}
 		await loadNotifications();
 	}
 
