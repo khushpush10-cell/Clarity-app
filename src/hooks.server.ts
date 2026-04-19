@@ -59,6 +59,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	initServerObservability();
 	event.locals.requestId = randomUUID();
 	event.locals.user = null;
+	const isHealthRoute = event.url.pathname.startsWith('/api/health');
 
 	const authDisabled = true;
 	const maintenance = env.MAINTENANCE_MODE === '1';
@@ -83,7 +84,15 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const authBypass = authDisabled || env.AUTH_BYPASS === '1';
 	if (authBypass) {
-		if (
+		if (isHealthRoute) {
+			// Keep health checks independent from auth bootstrap DB writes.
+			event.locals.user = {
+				id: 'health-check-user',
+				email: 'health@clarity.local',
+				name: 'Health Check',
+				avatarUrl: null
+			};
+		} else if (
 			event.url.pathname === '/' ||
 			event.url.pathname === '/maintenance' ||
 			event.url.pathname.startsWith('/auth')
@@ -91,27 +100,29 @@ export const handle: Handle = async ({ event, resolve }) => {
 			throw redirect(302, '/dashboard');
 		}
 
-		try {
-			const user = await ensureBypassUser();
-			event.locals.user = {
-				id: user.id,
-				email: user.email,
-				name: user.name,
-				avatarUrl: user.avatarUrl
-			};
-		} catch {
-			if (event.url.pathname.startsWith('/api')) {
-				return new Response(JSON.stringify({ error: 'Database unavailable' }), {
-					status: 503,
-					headers: { 'content-type': 'application/json' }
-				});
+		if (!isHealthRoute) {
+			try {
+				const user = await ensureBypassUser();
+				event.locals.user = {
+					id: user.id,
+					email: user.email,
+					name: user.name,
+					avatarUrl: user.avatarUrl
+				};
+			} catch {
+				if (event.url.pathname.startsWith('/api')) {
+					return new Response(JSON.stringify({ error: 'Database unavailable' }), {
+						status: 503,
+						headers: { 'content-type': 'application/json' }
+					});
+				}
+				event.locals.user = {
+					id: 'dev-bypass-user',
+					email: 'dev@clarity.local',
+					name: 'Dev Admin',
+					avatarUrl: null
+				};
 			}
-			event.locals.user = {
-				id: 'dev-bypass-user',
-				email: 'dev@clarity.local',
-				name: 'Dev Admin',
-				avatarUrl: null
-			};
 		}
 	} else {
 		const accessToken = event.cookies.get(ACCESS_COOKIE);
