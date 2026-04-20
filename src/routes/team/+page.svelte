@@ -17,7 +17,7 @@
 	interface MemberItem {
 		userId: string;
 		role: string;
-		user: { name: string };
+		user: { name: string; email?: string };
 	}
 
 	interface LocalTeamState {
@@ -36,7 +36,8 @@
 	let loading = $state(false);
 
 	let workspaceName = $state('');
-	let inviteUserId = $state('');
+	let inviteEmail = $state('');
+	let inviteName = $state('');
 	let inviteRole = $state('MEMBER');
 
 	onMount(() => { void loadWorkspaces(); });
@@ -170,15 +171,28 @@
 	async function addMember(event: SubmitEvent) {
 		event.preventDefault();
 		if (!selectedWorkspaceId) return;
+		if (!inviteEmail.trim()) {
+			error = 'Enter a member email to invite.';
+			return;
+		}
 		const result = await apiRequest<{ item?: unknown; error?: string }>(`/api/workspaces/${selectedWorkspaceId}/members`, {
-			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userId: inviteUserId.trim(), role: inviteRole })
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				email: inviteEmail.trim().toLowerCase(),
+				name: inviteName.trim() || undefined,
+				role: inviteRole
+			})
 		});
 		if (!result.ok) {
 			const local = readLocalState();
 			const created: MemberItem = {
-				userId: inviteUserId.trim() || crypto.randomUUID(),
+				userId: crypto.randomUUID(),
 				role: inviteRole,
-				user: { name: inviteUserId.trim() || 'New Member' }
+				user: {
+					name: inviteName.trim() || inviteEmail.trim().split('@')[0] || 'New Member',
+					email: inviteEmail.trim().toLowerCase()
+				}
 			};
 			const existing = local.membersByWorkspace[selectedWorkspaceId] ?? [];
 			const nextState: LocalTeamState = {
@@ -189,13 +203,17 @@
 				}
 			};
 			writeLocalState(nextState);
-			inviteUserId = '';
+			inviteEmail = '';
+			inviteName = '';
 			inviteRole = 'MEMBER';
 			error = 'Saved locally. Connect database to sync with server.';
 			await loadWorkspaceData();
 			return;
 		}
-		inviteUserId = ''; inviteRole = 'MEMBER';
+		inviteEmail = '';
+		inviteName = '';
+		inviteRole = 'MEMBER';
+		error = null;
 		await loadWorkspaceData();
 	}
 </script>
@@ -229,7 +247,8 @@
 				{#if selectedWorkspaceId}
 					<form class="mt-4 space-y-2 border-t border-border pt-4" onsubmit={addMember}>
 						<h3 class="text-xs font-semibold uppercase tracking-[0.06em] text-text-secondary">Invite member</h3>
-						<input bind:value={inviteUserId} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm" placeholder="User ID" type="text" />
+						<input bind:value={inviteEmail} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm" placeholder="Member email" type="email" />
+						<input bind:value={inviteName} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm" placeholder="Name (optional)" type="text" />
 						<select bind:value={inviteRole} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm">{#each ['ADMIN', 'MANAGER', 'MEMBER', 'VIEWER'] as role}<option value={role}>{role}</option>{/each}</select>
 						<button class="w-full rounded-[14px] bg-primary px-3 py-2 text-sm font-semibold text-on-primary" type="submit">Add member</button>
 					</form>

@@ -10,7 +10,12 @@ export const workspaceCreateSchema = z.object({
 export const workspaceUpdateSchema = workspaceCreateSchema.partial();
 
 export const workspaceMemberCreateSchema = z.object({
-	userId: z.string().cuid(),
+	userId: z.string().min(1).optional(),
+	email: z.string().email().optional(),
+	name: z.string().min(1).max(191).optional(),
 	role: z.nativeEnum(WorkspaceRole).default(WorkspaceRole.MEMBER),
 	permissions: z.record(z.string(), z.unknown()).optional()
+}).refine((value) => !!value.userId || !!value.email, {
+	message: 'Provide userId or email',
+	path: ['userId']
 });

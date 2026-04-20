@@ -54,12 +54,32 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		return json({ error: 'Invalid input', issues: parsed.error.issues }, { status: 400 });
 	}
 
-	const userExists = await prisma.user.findUnique({
-		where: { id: parsed.data.userId },
-		select: { id: true }
-	});
+	let targetUserId = parsed.data.userId;
+	if (!targetUserId && parsed.data.email) {
+		const existing = await prisma.user.findUnique({
+			where: { email: parsed.data.email },
+			select: { id: true }
+		});
+		if (existing) {
+			targetUserId = existing.id;
+		} else {
+			const fallbackName =
+				parsed.data.name?.trim() ||
+				parsed.data.email.split('@')[0] ||
+				'Team Member';
+			const created = await prisma.user.create({
+				data: {
+					email: parsed.data.email,
+					name: fallbackName,
+					emailVerified: false
+				},
+				select: { id: true }
+			});
+			targetUserId = created.id;
+		}
+	}
 
-	if (!userExists) {
+	if (!targetUserId) {
 		return json({ error: 'User not found' }, { status: 404 });
 	}
 
@@ -67,7 +87,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		where: {
 			workspaceId_userId: {
 				workspaceId: params.id,
-				userId: parsed.data.userId
+				userId: targetUserId
 			}
 		},
 		update: {
@@ -78,7 +98,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		},
 		create: {
 			workspaceId: params.id,
-			userId: parsed.data.userId,
+			userId: targetUserId,
 			role: parsed.data.role,
 			...(typeof parsed.data.permissions !== 'undefined'
 				? { permissions: parsed.data.permissions as Prisma.InputJsonValue }

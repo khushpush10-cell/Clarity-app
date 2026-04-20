@@ -1,6 +1,5 @@
 import * as Sentry from '@sentry/browser';
 import posthog from 'posthog-js';
-import { env } from '$env/dynamic/public';
 
 let initialized = false;
 
@@ -8,16 +7,20 @@ export function initObservability() {
 	if (initialized) return;
 	initialized = true;
 
-	if (env.PUBLIC_SENTRY_DSN) {
+	const sentryDsn = import.meta.env.PUBLIC_SENTRY_DSN;
+	const posthogKey = import.meta.env.PUBLIC_POSTHOG_KEY;
+	const posthogHost = import.meta.env.PUBLIC_POSTHOG_HOST || 'https://app.posthog.com';
+
+	if (sentryDsn) {
 		Sentry.init({
-			dsn: env.PUBLIC_SENTRY_DSN,
+			dsn: sentryDsn,
 			tracesSampleRate: 0.1
 		});
 	}
 
-	if (env.PUBLIC_POSTHOG_KEY) {
-		posthog.init(env.PUBLIC_POSTHOG_KEY, {
-			api_host: env.PUBLIC_POSTHOG_HOST || 'https://app.posthog.com',
+	if (posthogKey) {
+		posthog.init(posthogKey, {
+			api_host: posthogHost,
 			capture_pageview: true
 		});
 	}

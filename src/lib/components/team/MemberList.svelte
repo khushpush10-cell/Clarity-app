@@ -30,19 +30,46 @@
 			const parsed = JSON.parse(raw) as {
 				membersByWorkspace?: Record<
 					string,
-					Array<{ userId: string; role: string; user: { name: string } }>
+					Array<{ userId: string; role: string; user: { name: string; email?: string } }>
 				>;
 			};
 			const fromWorkspace = parsed.membersByWorkspace?.[workspaceId] ?? [];
 			return fromWorkspace.map((entry) => ({
 				userId: entry.userId,
 				name: entry.user?.name ?? entry.userId,
-				email: '-',
+				email: entry.user?.email ?? '-',
 				role: entry.role,
 				joinedAt: new Date().toISOString()
 			}));
 		} catch {
 			return [];
+		}
+	}
+
+	function removeMemberLocal(userId: string) {
+		if (!workspaceId) return;
+		try {
+			const raw = localStorage.getItem(LOCAL_TEAM_KEY);
+			const parsed = raw
+				? (JSON.parse(raw) as {
+						membersByWorkspace?: Record<
+							string,
+							Array<{ userId: string; role: string; user: { name: string; email?: string } }>
+						>;
+				  })
+				: { membersByWorkspace: {} };
+			const current = parsed.membersByWorkspace?.[workspaceId] ?? [];
+			const next = current.filter((entry) => entry.userId !== userId);
+			const updated = {
+				...parsed,
+				membersByWorkspace: {
+					...(parsed.membersByWorkspace ?? {}),
+					[workspaceId]: next
+				}
+			};
+			localStorage.setItem(LOCAL_TEAM_KEY, JSON.stringify(updated));
+		} catch {
+			// Ignore malformed local data
 		}
 	}
 
@@ -68,7 +95,13 @@
 		if (!workspaceId) return;
 		const ok = confirm('Remove this member?'); if (!ok) return;
 		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/workspaces/${workspaceId}/members/${userId}`, { method: 'DELETE' });
-		if (!result.ok) { error = result.error ?? 'Unable to remove member'; return; }
+		if (!result.ok) {
+			removeMemberLocal(userId);
+			items = items.filter((item) => item.userId !== userId);
+			error = 'Updated locally. Connect database to sync with server.';
+			dispatch('changed');
+			return;
+		}
 		dispatch('changed');
 		await loadMembers();
 	}
