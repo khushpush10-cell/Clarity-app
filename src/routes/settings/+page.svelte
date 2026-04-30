@@ -11,7 +11,6 @@
 		tasks: boolean;
 		habits: boolean;
 		goals: boolean;
-		team: boolean;
 		analytics: boolean;
 	};
 
@@ -29,8 +28,7 @@
 
 	let profile = $state({
 		name: '',
-		email: '',
-		avatarUrl: ''
+		email: ''
 	});
 
 	let sessions = $state(
@@ -56,7 +54,6 @@
 		tasks: true,
 		habits: true,
 		goals: true,
-		team: true,
 		analytics: false
 	});
 
@@ -149,12 +146,13 @@
 		void loadSessions();
 	});
 
-	async function loadMe() {
+async function loadMe() {
 		loading = true;
 		error = null;
-		const result = await apiRequest<{ user?: { name: string; email: string; avatarUrl: string | null }; error?: string }>(
-			'/api/users/me'
-		);
+		const result = await apiRequest<{
+			user?: { name: string; email: string; avatarUrl: string | null };
+			error?: string;
+		}>('/api/users/me');
 		if (!result.ok || !result.data?.user) {
 			const local = readLocalProfile();
 			if (local) {
@@ -169,8 +167,7 @@
 
 		profile = {
 			name: result.data.user.name,
-			email: result.data.user.email,
-			avatarUrl: result.data.user.avatarUrl ?? ''
+			email: result.data.user.email
 		};
 		writeLocalProfile(profile);
 		loading = false;
@@ -195,8 +192,7 @@
 			method: 'PUT',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
-				name: profile.name,
-				avatarUrl: profile.avatarUrl || null
+				name: profile.name
 			})
 		});
 
@@ -464,10 +460,6 @@
 							<label class="mb-1 block text-[13px] font-medium text-text-secondary" for="settings-email">Email</label>
 							<input id="settings-email" bind:value={profile.email} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm text-text-secondary" disabled type="email" />
 						</div>
-						<div>
-							<label class="mb-1 block text-[13px] font-medium text-text-secondary" for="settings-avatar">Avatar URL</label>
-							<input id="settings-avatar" bind:value={profile.avatarUrl} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm" type="url" />
-						</div>
 						<button class="rounded-[14px] bg-primary px-4 py-2 text-sm font-semibold text-on-primary transition hover:bg-primary-hover" disabled={saving} type="submit">
 							{saving ? 'Saving...' : 'Save profile'}
 						</button>
@@ -563,7 +555,6 @@
 							{ key: 'tasks', label: 'Task reminders' },
 							{ key: 'habits', label: 'Habit nudges' },
 							{ key: 'goals', label: 'Goal milestones' },
-							{ key: 'team', label: 'Team mentions' },
 							{ key: 'analytics', label: 'Weekly analytics summary' }
 						] as pref}
 							<label class="flex items-center justify-between rounded-[12px] border border-border bg-surface-2 px-3 py-2">

@@ -1,12 +1,10 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-
 	import type { TaskPriorityUi, TaskStatusUi } from '$lib/stores/tasks';
 
-	const dispatch = createEventDispatcher<{
-		search: string;
-		status: TaskStatusUi | 'ALL';
-		priority: TaskPriorityUi | 'ALL';
+	let { onSearch, onStatus, onPriority } = $props<{
+		onSearch?: (value: string) => void | Promise<void>;
+		onStatus?: (value: TaskStatusUi | 'ALL') => void | Promise<void>;
+		onPriority?: (value: TaskPriorityUi | 'ALL') => void | Promise<void>;
 	}>();
 
 	let search = $state('');
@@ -14,10 +12,10 @@
 	let priority = $state<TaskPriorityUi | 'ALL'>('ALL');
 	let showAdvanced = $state(false);
 
-	function emitAll() {
-		dispatch('search', search);
-		dispatch('status', status);
-		dispatch('priority', priority);
+	async function emitAll() {
+		await onSearch?.(search);
+		await onStatus?.(status);
+		await onPriority?.(priority);
 	}
 </script>
 

@@ -9,7 +9,7 @@ const globalForPrisma = globalThis as unknown as {
 
 function createPrismaClient(): PrismaClient {
 	const client = new PrismaClient({
-		datasourceUrl: env.DATABASE_URL,
+		...(env.DATABASE_URL ? { datasourceUrl: env.DATABASE_URL } : {}),
 		log:
 			env.NODE_ENV === 'development' || Number(env.LOG_SLOW_QUERIES_MS ?? '0') > 0
 				? ['query', 'error', 'warn']
@@ -37,14 +37,4 @@ function getPrismaClient(): PrismaClient {
 	return globalForPrisma.prisma;
 }
 
-export const prisma = new Proxy({} as PrismaClient, {
-	get(_target, prop, receiver) {
-		const client = getPrismaClient() as unknown as Record<string | symbol, unknown>;
-		const value = Reflect.get(client, prop, receiver);
-		if (typeof value === 'function') {
-			return (value as (...args: unknown[]) => unknown).bind(client);
-		}
-
-		return value;
-	}
-});
+export const prisma = getPrismaClient();

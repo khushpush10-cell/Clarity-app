@@ -1,16 +1,13 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-
 	import type { TaskItem, TaskStatusUi } from '$lib/stores/tasks';
 
-	let { items = [] } = $props<{ items?: TaskItem[] }>();
-
-	const dispatch = createEventDispatcher<{
-		move: { id: string; status: TaskStatusUi; beforeId?: string | null };
-		complete: string;
-		delete: string;
-		duplicate: string;
-		edit: { id: string; title: string };
+	let { items = [], onMove, onComplete, onDelete, onDuplicate, onEdit } = $props<{
+		items?: TaskItem[];
+		onMove?: (payload: { id: string; status: TaskStatusUi; beforeId?: string | null }) => void | Promise<void>;
+		onComplete?: (id: string) => void | Promise<void>;
+		onDelete?: (id: string) => void | Promise<void>;
+		onDuplicate?: (id: string) => void | Promise<void>;
+		onEdit?: (payload: { id: string; title: string }) => void | Promise<void>;
 	}>();
 
 	const columns: { key: TaskStatusUi; label: string }[] = [
@@ -21,14 +18,14 @@
 
 	let draggingTaskId = $state<string | null>(null);
 	function onDragStart(taskId: string) { draggingTaskId = taskId; }
-	function onDropColumn(status: TaskStatusUi) {
+	async function onDropColumn(status: TaskStatusUi) {
 		if (!draggingTaskId) return;
-		dispatch('move', { id: draggingTaskId, status, beforeId: null });
+		await onMove?.({ id: draggingTaskId, status, beforeId: null });
 		draggingTaskId = null;
 	}
-	function onDropCard(status: TaskStatusUi, beforeId: string) {
+	async function onDropCard(status: TaskStatusUi, beforeId: string) {
 		if (!draggingTaskId || draggingTaskId === beforeId) return;
-		dispatch('move', { id: draggingTaskId, status, beforeId });
+		await onMove?.({ id: draggingTaskId, status, beforeId });
 		draggingTaskId = null;
 	}
 </script>
@@ -44,11 +41,11 @@
 						{#if item.description}<p class="mt-1 text-xs text-text-secondary">{item.description}</p>{/if}
 						<div class="mt-2 flex flex-wrap gap-2">
 							{#if item.status !== 'DONE'}
-								<button class="rounded-full bg-primary px-2.5 py-1 text-xs text-on-primary" onclick={() => dispatch('complete', item.id)} type="button">Complete</button>
+								<button class="rounded-full bg-primary px-2.5 py-1 text-xs text-on-primary" onclick={() => onComplete?.(item.id)} type="button">Complete</button>
 							{/if}
-							<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => dispatch('duplicate', item.id)} type="button">Duplicate</button>
-							<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => dispatch('edit', { id: item.id, title: item.title })} type="button">Edit</button>
-							<button class="rounded-full bg-danger px-2.5 py-1 text-xs text-white" onclick={() => dispatch('delete', item.id)} type="button">Delete</button>
+							<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => onDuplicate?.(item.id)} type="button">Duplicate</button>
+							<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => onEdit?.({ id: item.id, title: item.title })} type="button">Edit</button>
+							<button class="rounded-full bg-danger px-2.5 py-1 text-xs text-white" onclick={() => onDelete?.(item.id)} type="button">Delete</button>
 						</div>
 					</article>
 				{/each}

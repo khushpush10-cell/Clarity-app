@@ -6,6 +6,7 @@
 	import OnboardingTour from '$lib/components/system/OnboardingTour.svelte';
 	import Toast from '$lib/components/ui/Toast.svelte';
 	import { initObservability } from '$lib/observability/client';
+	import { registerPwa } from '$lib/pwa/register';
 
 	let { children } = $props();
 
@@ -17,6 +18,7 @@
 		document.documentElement.setAttribute('data-theme', theme);
 		document.documentElement.setAttribute('data-palette', storedPalette);
 		initObservability();
+		registerPwa();
 	});
 </script>
 

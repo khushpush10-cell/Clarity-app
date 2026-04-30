@@ -71,12 +71,12 @@
 		}
 	}
 
-	async function completeTask(event: CustomEvent<string>) {
-		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${event.detail}/complete`, { method: 'POST' });
+	async function completeTask(id: string) {
+		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${id}/complete`, { method: 'POST' });
 		if (!result.ok) {
 			const now = new Date().toISOString();
 			const next = readLocalTasks().map((item) =>
-				item.id === event.detail
+				item.id === id
 					? { ...item, status: 'DONE' as TaskStatusUi, completedAt: now, updatedAt: now }
 					: item
 			);
@@ -88,10 +88,10 @@
 		await loadTasks();
 	}
 
-	async function duplicateTask(event: CustomEvent<string>) {
-		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${event.detail}/duplicate`, { method: 'POST' });
+	async function duplicateTask(id: string) {
+		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${id}/duplicate`, { method: 'POST' });
 		if (!result.ok) {
-			const source = items.find((item) => item.id === event.detail);
+			const source = items.find((item) => item.id === id);
 			if (!source) return;
 			const now = new Date().toISOString();
 			const copy: TaskItem = {
@@ -113,13 +113,13 @@
 		await loadTasks();
 	}
 
-	async function deleteTask(event: CustomEvent<string>) {
+	async function deleteTask(id: string) {
 		const ok = confirm('Delete this task?');
 		if (!ok) return;
 
-		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/tasks/${event.detail}`, { method: 'DELETE' });
+		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/tasks/${id}`, { method: 'DELETE' });
 		if (!result.ok) {
-			const next = readLocalTasks().filter((item) => item.id !== event.detail);
+			const next = readLocalTasks().filter((item) => item.id !== id);
 			writeLocalTasks(next);
 			items = next;
 			error = 'Saved locally. Connect database to sync with server.';
@@ -128,11 +128,11 @@
 		await loadTasks();
 	}
 
-	async function editTask(event: CustomEvent<{ id: string; title: string }>) {
-		const nextTitle = (prompt('Edit title', event.detail.title) ?? event.detail.title).trim();
+	async function editTask(payload: { id: string; title: string }) {
+		const nextTitle = (prompt('Edit title', payload.title) ?? payload.title).trim();
 		if (!nextTitle) return;
 
-		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${event.detail.id}`, {
+		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${payload.id}`, {
 			method: 'PUT',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ title: nextTitle })
@@ -140,7 +140,7 @@
 		if (!result.ok) {
 			const now = new Date().toISOString();
 			const next = readLocalTasks().map((item) =>
-				item.id === event.detail.id ? { ...item, title: nextTitle, updatedAt: now } : item
+				item.id === payload.id ? { ...item, title: nextTitle, updatedAt: now } : item
 			);
 			writeLocalTasks(next);
 			items = next;
@@ -150,19 +150,19 @@
 		await loadTasks();
 	}
 
-	async function createTaskFromCalendar(event: CustomEvent<{ title: string; dueDate: string | null }>) {
+	async function createTaskFromCalendar(payload: { title: string; dueDate: string | null }) {
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>('/api/tasks', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
-				title: event.detail.title,
+				title: payload.title,
 				description: null,
 				priority: 'MEDIUM',
-				dueDate: event.detail.dueDate
+				dueDate: payload.dueDate
 			})
 		});
 		if (!result.ok) {
-			const local = makeLocalTask({ title: event.detail.title, dueDate: event.detail.dueDate });
+			const local = makeLocalTask({ title: payload.title, dueDate: payload.dueDate });
 			const next = [local, ...readLocalTasks()];
 			writeLocalTasks(next);
 			items = next;
@@ -172,16 +172,16 @@
 		await loadTasks();
 	}
 
-	async function rescheduleTask(event: CustomEvent<{ id: string; dueDate: string | null }>) {
-		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${event.detail.id}`, {
+	async function rescheduleTask(payload: { id: string; dueDate: string | null }) {
+		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${payload.id}`, {
 			method: 'PUT',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ dueDate: event.detail.dueDate })
+			body: JSON.stringify({ dueDate: payload.dueDate })
 		});
 		if (!result.ok) {
 			const now = new Date().toISOString();
 			const next = readLocalTasks().map((item) =>
-				item.id === event.detail.id ? { ...item, dueDate: event.detail.dueDate, updatedAt: now } : item
+				item.id === payload.id ? { ...item, dueDate: payload.dueDate, updatedAt: now } : item
 			);
 			writeLocalTasks(next);
 			items = next;
@@ -203,12 +203,12 @@
 		{:else}
 			<CalendarView
 				{items}
-				on:complete={completeTask}
-				on:delete={deleteTask}
-				on:duplicate={duplicateTask}
-				on:edit={editTask}
-				on:create={createTaskFromCalendar}
-				on:reschedule={rescheduleTask}
+				onComplete={completeTask}
+				onDelete={deleteTask}
+				onDuplicate={duplicateTask}
+				onEdit={editTask}
+				onCreate={createTaskFromCalendar}
+				onReschedule={rescheduleTask}
 			/>
 		{/if}
 	</section>

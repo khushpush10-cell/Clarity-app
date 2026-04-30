@@ -1,9 +1,10 @@
 import { redirect } from '@sveltejs/kit';
+import { shouldRequireAuth } from '$lib/server/auth/guards';
 
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	if (!locals.user) {
+	if (shouldRequireAuth(locals.user)) {
 		throw redirect(302, '/auth/login');
 	}
 };

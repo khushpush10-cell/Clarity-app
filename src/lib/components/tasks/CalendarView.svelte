@@ -1,17 +1,22 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-
 	import type { TaskItem } from '$lib/stores/tasks';
 
-	let { items = [] } = $props<{ items?: TaskItem[] }>();
-
-	const dispatch = createEventDispatcher<{
-		complete: string;
-		delete: string;
-		duplicate: string;
-		edit: { id: string; title: string };
-		create: { title: string; dueDate: string | null };
-		reschedule: { id: string; dueDate: string | null };
+	let {
+		items = [],
+		onComplete,
+		onDelete,
+		onDuplicate,
+		onEdit,
+		onCreate,
+		onReschedule
+	} = $props<{
+		items?: TaskItem[];
+		onComplete?: (id: string) => void | Promise<void>;
+		onDelete?: (id: string) => void | Promise<void>;
+		onDuplicate?: (id: string) => void | Promise<void>;
+		onEdit?: (payload: { id: string; title: string }) => void | Promise<void>;
+		onCreate?: (payload: { title: string; dueDate: string | null }) => void | Promise<void>;
+		onReschedule?: (payload: { id: string; dueDate: string | null }) => void | Promise<void>;
 	}>();
 
 	type CalendarMode = 'day' | 'week' | 'month';
@@ -149,10 +154,10 @@
 		}
 	}
 
-	function createForDate(date: Date) {
+	async function createForDate(date: Date) {
 		const title = (prompt('Task title') ?? '').trim();
 		if (!title) return;
-		dispatch('create', { title, dueDate: toIsoAtNoon(date) });
+		await onCreate?.({ title, dueDate: toIsoAtNoon(date) });
 	}
 
 	function handleDragStart(id: string) {
@@ -169,15 +174,15 @@
 		dragOverKey = dateKey;
 	}
 
-	function onDropDate(event: DragEvent, dateKey: string) {
+	async function onDropDate(event: DragEvent, dateKey: string) {
 		event.preventDefault();
 		if (!dragTaskId) return;
-		dispatch('reschedule', { id: dragTaskId, dueDate: toIsoAtNoon(fromDateKey(dateKey)) });
+		await onReschedule?.({ id: dragTaskId, dueDate: toIsoAtNoon(fromDateKey(dateKey)) });
 		handleDragEnd();
 	}
 
-	function unscheduleTask(id: string) {
-		dispatch('reschedule', { id, dueDate: null });
+	async function unscheduleTask(id: string) {
+		await onReschedule?.({ id, dueDate: null });
 	}
 
 	function priorityClass(priority: TaskItem['priority']) {
@@ -296,12 +301,12 @@
 							</div>
 							<div class="mt-3 flex flex-wrap gap-2">
 								{#if task.status !== 'DONE'}
-									<button class="rounded-full bg-primary px-2.5 py-1 text-xs text-on-primary" onclick={() => dispatch('complete', task.id)} type="button">Complete</button>
+									<button class="rounded-full bg-primary px-2.5 py-1 text-xs text-on-primary" onclick={() => onComplete?.(task.id)} type="button">Complete</button>
 								{/if}
-								<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => dispatch('edit', { id: task.id, title: task.title })} type="button">Edit</button>
-								<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => dispatch('duplicate', task.id)} type="button">Duplicate</button>
+								<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => onEdit?.({ id: task.id, title: task.title })} type="button">Edit</button>
+								<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => onDuplicate?.(task.id)} type="button">Duplicate</button>
 								<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => unscheduleTask(task.id)} type="button">Unschedule</button>
-								<button class="rounded-full bg-danger px-2.5 py-1 text-xs text-white" onclick={() => dispatch('delete', task.id)} type="button">Delete</button>
+								<button class="rounded-full bg-danger px-2.5 py-1 text-xs text-white" onclick={() => onDelete?.(task.id)} type="button">Delete</button>
 							</div>
 						</article>
 					{/each}

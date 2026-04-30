@@ -16,7 +16,7 @@
 	onMount(() => {
 		const localItems = readLocalNotifications();
 		if (localItems.length > 0) {
-			notifications = localItems;
+		notifications = localItems;
 			unread = localItems.filter((item) => !item.read).length;
 		}
 		void loadNotifications();
@@ -51,13 +51,6 @@
 						message: 'Create your first task, habit, and goal to build momentum.',
 						read: false,
 						link: '/dashboard'
-					},
-					{
-						id: crypto.randomUUID(),
-						title: 'Tip',
-						message: 'Use J/K to quickly navigate between sections.',
-						read: false,
-						link: '/tasks'
 					}
 				];
 				notifications = seeded;
@@ -134,7 +127,6 @@
 		/>
 	</div>
 	<div class="relative ml-3 flex items-center gap-2 text-sm text-text-secondary md:ml-6 md:gap-3">
-		<span class="hidden lg:inline">Press J/K to navigate</span>
 		<button
 			class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-text-primary"
 			onclick={toggleTheme}

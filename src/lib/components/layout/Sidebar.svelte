@@ -6,7 +6,6 @@
 		{ href: '/tasks', label: 'Tasks' },
 		{ href: '/habits', label: 'Habits' },
 		{ href: '/calendar', label: 'Calendar' },
-		{ href: '/team', label: 'Team' },
 		{ href: '/goals', label: 'Goals' },
 		{ href: '/analytics', label: 'Analytics' },
 		{ href: '/settings', label: 'Settings' }

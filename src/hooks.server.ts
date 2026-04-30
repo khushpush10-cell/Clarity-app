@@ -3,19 +3,18 @@ import { randomUUID } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import { redirect, type Handle, type HandleServerError } from '@sveltejs/kit';
 
-import { ACCESS_COOKIE } from '$lib/server/auth/constants';
-import { verifyAccessToken } from '$lib/server/auth/jwt';
-import { rotateSession, touchSession } from '$lib/server/auth/service';
 import { captureError, initServerObservability } from '$lib/server/observability';
 import { prisma } from '$lib/server/prisma';
 import { ensurePersonalWorkspace } from '$lib/server/workspace';
 
+const guestCookieName = 'clarity_guest_id';
+
 const csp = [
 	"default-src 'self'",
 	"script-src 'self' 'unsafe-inline'",
-	"style-src 'self' 'unsafe-inline'",
+	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
 	"img-src 'self' data: https:",
-	"font-src 'self' data:",
+	"font-src 'self' data: https://fonts.gstatic.com",
 	"connect-src 'self'",
 	"frame-ancestors 'none'",
 	"base-uri 'self'",
@@ -26,17 +25,35 @@ function isStateChanging(method: string) {
 	return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase());
 }
 
-async function ensureBypassUser() {
+function getOrCreateGuestId(event: Parameters<Handle>[0]['event']) {
+	const existing = event.cookies.get(guestCookieName);
+	if (existing && /^[a-f0-9-]{36}$/i.test(existing)) {
+		return existing;
+	}
+
+	const guestId = randomUUID();
+	event.cookies.set(guestCookieName, guestId, {
+		path: '/',
+		httpOnly: true,
+		sameSite: 'lax',
+		secure: env.NODE_ENV === 'production',
+		maxAge: 60 * 60 * 24 * 365
+	});
+	return guestId;
+}
+
+async function ensureBypassUser(guestId: string) {
+	const email = `guest-${guestId}@clarity.local`;
 	const user = await prisma.user.upsert({
-		where: { email: 'dev@clarity.local' },
+		where: { email },
 		update: {
-			name: 'Dev Admin',
+			name: 'Guest',
 			emailVerified: true,
 			deletedAt: null
 		},
 		create: {
-			email: 'dev@clarity.local',
-			name: 'Dev Admin',
+			email,
+			name: 'Guest',
 			emailVerified: true,
 			passwordHash: null,
 			progressCore: {
@@ -60,13 +77,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.requestId = randomUUID();
 	event.locals.user = null;
 	const isHealthRoute = event.url.pathname.startsWith('/api/health');
-
-	const authDisabled = true;
 	const maintenance = env.MAINTENANCE_MODE === '1';
+
 	if (maintenance && event.url.pathname !== '/maintenance' && !event.url.pathname.startsWith('/api/health')) {
 		throw redirect(302, '/maintenance');
 	}
-	if (!maintenance && event.url.pathname === '/maintenance') {
+	if (!maintenance && event.url.pathname === '/maintenance' && !event.url.pathname.startsWith('/api')) {
 		throw redirect(302, '/dashboard');
 	}
 
@@ -82,85 +98,34 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	const authBypass = authDisabled || env.AUTH_BYPASS === '1';
-	if (authBypass) {
+	try {
+		const user = await ensureBypassUser(getOrCreateGuestId(event));
+		event.locals.user = {
+			id: user.id,
+			email: user.email,
+			name: user.name,
+			avatarUrl: user.avatarUrl
+		};
+	} catch {
 		if (isHealthRoute) {
-			// Keep health checks independent from auth bootstrap DB writes.
 			event.locals.user = {
 				id: 'health-check-user',
 				email: 'health@clarity.local',
 				name: 'Health Check',
 				avatarUrl: null
 			};
-		} else if (
-			event.url.pathname === '/' ||
-			event.url.pathname === '/maintenance' ||
-			event.url.pathname.startsWith('/auth')
-		) {
-			throw redirect(302, '/dashboard');
-		}
-
-		if (!isHealthRoute) {
-			try {
-				const user = await ensureBypassUser();
-				event.locals.user = {
-					id: user.id,
-					email: user.email,
-					name: user.name,
-					avatarUrl: user.avatarUrl
-				};
-			} catch {
-				if (event.url.pathname.startsWith('/api')) {
-					return new Response(JSON.stringify({ error: 'Database unavailable' }), {
-						status: 503,
-						headers: { 'content-type': 'application/json' }
-					});
-				}
-				event.locals.user = {
-					id: 'dev-bypass-user',
-					email: 'dev@clarity.local',
-					name: 'Dev Admin',
-					avatarUrl: null
-				};
-			}
-		}
-	} else {
-		const accessToken = event.cookies.get(ACCESS_COOKIE);
-		if (accessToken) {
-			const payload = await verifyAccessToken(accessToken);
-
-			if (payload?.sub) {
-				const user = await prisma.user.findUnique({
-					where: { id: payload.sub },
-					select: {
-						id: true,
-						email: true,
-						name: true,
-						avatarUrl: true,
-						deletedAt: true
-					}
-				});
-
-				if (user && !user.deletedAt) {
-					event.locals.user = {
-						id: user.id,
-						email: user.email,
-						name: user.name,
-						avatarUrl: user.avatarUrl
-					};
-				}
-				await touchSession(event);
-			} else {
-				const rotated = await rotateSession(event);
-				if (rotated) {
-					event.locals.user = rotated;
-				}
-			}
+		} else if (event.url.pathname.startsWith('/api')) {
+			return new Response(JSON.stringify({ error: 'Database unavailable' }), {
+				status: 503,
+				headers: { 'content-type': 'application/json' }
+			});
 		} else {
-			const rotated = await rotateSession(event);
-			if (rotated) {
-				event.locals.user = rotated;
-			}
+			event.locals.user = {
+				id: 'guest-fallback-user',
+				email: 'guest@clarity.local',
+				name: 'Guest',
+				avatarUrl: null
+			};
 		}
 	}
 

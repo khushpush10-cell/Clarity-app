@@ -1,4 +1,4 @@
-const SW_VERSION = '2026-04-17-1';
+const SW_VERSION = '2026-04-30-1';
 const SW_VERSION_KEY = 'clarity_sw_version';
 
 export function registerPwa() {

@@ -190,14 +190,14 @@
 		persistPresetsLocal();
 	}
 
-	async function createTask(event: CustomEvent<{ title: string; description: string | null; priority: TaskPriorityUi; dueDate: string | null; }>) {
-		const body = { title: event.detail.title, description: event.detail.description, priority: event.detail.priority, dueDate: event.detail.dueDate ? new Date(event.detail.dueDate).toISOString() : null };
+	async function createTask(payload: { title: string; description: string | null; priority: TaskPriorityUi; dueDate: string | null; }) {
+		const body = { title: payload.title, description: payload.description, priority: payload.priority, dueDate: payload.dueDate ? new Date(payload.dueDate).toISOString() : null };
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>('/api/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 		if (!result.ok) {
 			const local = makeLocalTask({
-				title: event.detail.title,
-				description: event.detail.description,
-				priority: event.detail.priority,
+				title: payload.title,
+				description: payload.description,
+				priority: payload.priority,
 				dueDate: body.dueDate
 			});
 			upsertLocalTask(local);
@@ -304,7 +304,7 @@
 		if (!result.ok) throw new Error(result.error ?? 'Unable to reorder tasks');
 	}
 
-	async function completeTask(event: CustomEvent<string>) { await completeTaskById(event.detail); }
+	async function completeTask(id: string) { await completeTaskById(id); }
 	async function completeTaskById(id: string) {
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${id}/complete`, { method: 'POST' });
 		if (!result.ok) {
@@ -348,7 +348,7 @@
 		await completeTaskById(target.id);
 	}
 
-	async function duplicateTask(event: CustomEvent<string>) { await duplicateTaskById(event.detail); }
+	async function duplicateTask(id: string) { await duplicateTaskById(id); }
 	async function duplicateTaskById(id: string) {
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${id}/duplicate`, { method: 'POST' });
 		if (!result.ok) {
@@ -374,7 +374,7 @@
 		await loadTasks();
 	}
 
-	async function deleteTask(event: CustomEvent<string>) { await deleteTaskById(event.detail); }
+	async function deleteTask(id: string) { await deleteTaskById(id); }
 	async function deleteTaskById(id: string) {
 		const ok = confirm('Delete this task?'); if (!ok) return;
 		const result = await apiRequest<{ success?: boolean; error?: string }>(`/api/tasks/${id}`, { method: 'DELETE' });
@@ -388,16 +388,16 @@
 		await loadTasks();
 	}
 
-	async function editTask(event: CustomEvent<{ id: string; title: string }>) {
-		const nextTitle = event.detail.title.includes('(Copy)') ? event.detail.title : (prompt('Edit task title', event.detail.title) ?? event.detail.title).trim();
+	async function editTask(payload: { id: string; title: string }) {
+		const nextTitle = payload.title.includes('(Copy)') ? payload.title : (prompt('Edit task title', payload.title) ?? payload.title).trim();
 		if (!nextTitle) return;
-		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${event.detail.id}`, {
+		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${payload.id}`, {
 			method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: nextTitle })
 		});
 		if (!result.ok) {
 			const now = new Date().toISOString();
 			const next = readLocalTasks().map((item) =>
-				item.id === event.detail.id ? { ...item, title: nextTitle, updatedAt: now } : item
+				item.id === payload.id ? { ...item, title: nextTitle, updatedAt: now } : item
 			);
 			writeLocalTasks(next);
 			tasks.setItems(next);
@@ -427,18 +427,18 @@
 		await loadTasks();
 	}
 
-	async function moveTask(event: CustomEvent<{ id: string; status: TaskStatusUi; beforeId?: string | null }>) {
-		const moving = items.find((candidate) => candidate.id === event.detail.id); if (!moving) return;
+	async function moveTask(payload: { id: string; status: TaskStatusUi; beforeId?: string | null }) {
+		const moving = items.find((candidate) => candidate.id === payload.id); if (!moving) return;
 		const canPersistReorder = !search && statusFilter === 'ALL' && priorityFilter === 'ALL';
-		if (!canPersistReorder) { await patchTask(event.detail.id, { status: event.detail.status }); return; }
+		if (!canPersistReorder) { await patchTask(payload.id, { status: payload.status }); return; }
 		try {
-			const sourceStatus = moving.status; const targetStatus = event.detail.status; const workspaceId = moving.workspaceId;
+			const sourceStatus = moving.status; const targetStatus = payload.status; const workspaceId = moving.workspaceId;
 			if (sourceStatus === targetStatus) {
-				const reordered = insertBefore(orderedIdsForStatus(targetStatus), moving.id, event.detail.beforeId ?? null);
+				const reordered = insertBefore(orderedIdsForStatus(targetStatus), moving.id, payload.beforeId ?? null);
 				await persistOrder(workspaceId, targetStatus, reordered);
 			} else {
 				const sourceOrdered = orderedIdsForStatus(sourceStatus).filter((id) => id !== moving.id);
-				const targetOrdered = insertBefore(orderedIdsForStatus(targetStatus), moving.id, event.detail.beforeId ?? null);
+				const targetOrdered = insertBefore(orderedIdsForStatus(targetStatus), moving.id, payload.beforeId ?? null);
 				await persistOrder(workspaceId, sourceStatus, sourceOrdered);
 				await persistOrder(workspaceId, targetStatus, targetOrdered);
 			}
@@ -448,19 +448,19 @@
 		}
 	}
 
-	async function onSearch(event: CustomEvent<string>) { tasks.setSearch(event.detail); await loadTasks(); }
-	async function onStatus(event: CustomEvent<TaskStatusUi | 'ALL'>) { tasks.setStatusFilter(event.detail); await loadTasks(); }
-	async function onPriority(event: CustomEvent<TaskPriorityUi | 'ALL'>) { tasks.setPriorityFilter(event.detail); await loadTasks(); }
-	async function createTaskFromCalendar(event: CustomEvent<{ title: string; dueDate: string | null }>) {
+	async function onSearch(value: string) { tasks.setSearch(value); await loadTasks(); }
+	async function onStatus(value: TaskStatusUi | 'ALL') { tasks.setStatusFilter(value); await loadTasks(); }
+	async function onPriority(value: TaskPriorityUi | 'ALL') { tasks.setPriorityFilter(value); await loadTasks(); }
+	async function createTaskFromCalendar(payload: { title: string; dueDate: string | null }) {
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>('/api/tasks', {
-			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: event.detail.title, description: null, priority: 'MEDIUM', dueDate: event.detail.dueDate })
+			method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: payload.title, description: null, priority: 'MEDIUM', dueDate: payload.dueDate })
 		});
 		if (!result.ok) {
 			const local = makeLocalTask({
-				title: event.detail.title,
+				title: payload.title,
 				description: null,
 				priority: 'MEDIUM',
-				dueDate: event.detail.dueDate
+				dueDate: payload.dueDate
 			});
 			upsertLocalTask(local);
 			tasks.setItems([local, ...items]);
@@ -469,7 +469,7 @@
 		}
 		await loadTasks();
 	}
-	async function rescheduleTask(event: CustomEvent<{ id: string; dueDate: string | null }>) { await patchTask(event.detail.id, { dueDate: event.detail.dueDate }); }
+	async function rescheduleTask(payload: { id: string; dueDate: string | null }) { await patchTask(payload.id, { dueDate: payload.dueDate }); }
 	function setView(nextView: 'list' | 'kanban' | 'calendar' | 'table') { tasks.setView(nextView); }
 </script>
 
@@ -507,8 +507,8 @@
 		</div>
 	{/if}
 
-	<TaskForm on:create={createTask} />
-	<TaskFilters on:search={onSearch} on:status={onStatus} on:priority={onPriority} />
+	<TaskForm onCreate={createTask} />
+	<TaskFilters onSearch={onSearch} onStatus={onStatus} onPriority={onPriority} />
 
 	<div class="flex flex-wrap items-center gap-2">
 		<div class="inline-flex rounded-full border border-border bg-surface p-1">
@@ -545,14 +545,14 @@
 			{#each items as item (item.id)}
 				<div class="flex items-start gap-2">
 					<input checked={selectedIds.includes(item.id)} onclick={() => toggleSelect(item.id)} type="checkbox" />
-					<div class="flex-1"><TaskCard {item} on:complete={completeTask} on:delete={deleteTask} on:duplicate={duplicateTask} on:edit={editTask} /></div>
+					<div class="flex-1"><TaskCard {item} onComplete={completeTask} onDelete={deleteTask} onDuplicate={duplicateTask} onEdit={editTask} /></div>
 				</div>
 			{/each}
 		</div>
 	{:else if view === 'kanban'}
-		<KanbanBoard items={items} on:move={moveTask} on:complete={completeTask} on:delete={deleteTask} on:duplicate={duplicateTask} on:edit={editTask} />
+		<KanbanBoard items={items} onMove={moveTask} onComplete={completeTask} onDelete={deleteTask} onDuplicate={duplicateTask} onEdit={editTask} />
 	{:else if view === 'calendar'}
-		<CalendarView items={items} on:complete={completeTask} on:delete={deleteTask} on:duplicate={duplicateTask} on:edit={editTask} on:create={createTaskFromCalendar} on:reschedule={rescheduleTask} />
+		<CalendarView items={items} onComplete={completeTask} onDelete={deleteTask} onDuplicate={duplicateTask} onEdit={editTask} onCreate={createTaskFromCalendar} onReschedule={rescheduleTask} />
 	{:else}
 		<div class="app-card overflow-auto">
 			<table class="min-w-full border-collapse text-sm">

@@ -1,10 +1,8 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+import { goto } from '$app/navigation';
+import { onMount } from 'svelte';
 
-	import ProgressCore from '$lib/components/core/ProgressCore.svelte';
-	import FocusTimer from '$lib/components/focus/FocusTimer.svelte';
-	import DashboardLayout from '$lib/components/layout/DashboardLayout.svelte';
+import DashboardLayout from '$lib/components/layout/DashboardLayout.svelte';
 	import type { HabitItem } from '$lib/stores/habits';
 	import type { TaskItem } from '$lib/stores/tasks';
 	import { apiRequest } from '$lib/utils/http';
@@ -91,16 +89,15 @@
 		}
 	}
 
-	function startSuggestedFocus() {
-		fabOpen = false;
-		window.dispatchEvent(
-			new CustomEvent('clarity:focus-quick-start', {
-				detail: { minutes: focusSuggestionMinutes }
-			})
-		);
-		const el = document.getElementById('focus');
-		el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-	}
+function startSuggestedFocus() {
+	fabOpen = false;
+	window.dispatchEvent(
+		new CustomEvent('clarity:focus-quick-start', {
+			detail: { minutes: focusSuggestionMinutes }
+		})
+	);
+	void goto('/tasks');
+}
 
 	async function goToTasks() {
 		fabOpen = false;
@@ -114,7 +111,7 @@
 </script>
 
 <DashboardLayout>
-	<section class="space-y-4 xl:col-span-8">
+	<section class="space-y-4 xl:col-span-12">
 		<section class="app-card p-5 md:p-6">
 			<h1 class="text-3xl font-semibold text-text-primary">Dashboard</h1>
 			<p class="mt-2 text-sm text-text-secondary">A calm overview for planning your day with steady momentum.</p>
@@ -156,15 +153,30 @@
 					<button class="mt-2 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-on-primary" onclick={startSuggestedFocus} type="button">Start focus</button>
 				</article>
 			</div>
+
+			<div class="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+				<article class="muted-panel p-4">
+					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">This week</p>
+					<p class="mt-2 text-2xl font-semibold text-text-primary">{todayTasks.length}</p>
+					<p class="text-sm text-text-secondary">priority items in active plan</p>
+				</article>
+				<article class="muted-panel p-4">
+					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">Habit momentum</p>
+					<p class="mt-2 text-2xl font-semibold text-text-primary">{habitSuggestion?.streakCurrent ?? 0}</p>
+					<p class="text-sm text-text-secondary">current streak days</p>
+				</article>
+				<article class="muted-panel p-4">
+					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">Next action</p>
+					<p class="mt-2 text-sm text-text-primary">
+						{#if todayTasks.length > 0}
+							Complete: {todayTasks[0]?.title}
+						{:else}
+							Add one task to start momentum
+						{/if}
+					</p>
+				</article>
+			</div>
 		</section>
-
-		<div id="focus">
-			<FocusTimer />
-		</div>
-	</section>
-
-	<section class="xl:col-span-4">
-		<ProgressCore />
 	</section>
 </DashboardLayout>
 

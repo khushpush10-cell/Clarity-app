@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-
 	import type { TaskPriorityUi } from '$lib/stores/tasks';
 
-	const dispatch = createEventDispatcher<{
-		create: {
-			title: string;
-			description: string | null;
-			priority: TaskPriorityUi;
-			dueDate: string | null;
-		};
+	type TaskCreatePayload = {
+		title: string;
+		description: string | null;
+		priority: TaskPriorityUi;
+		dueDate: string | null;
+	};
+
+	let { onCreate } = $props<{
+		onCreate?: (payload: TaskCreatePayload) => void | Promise<void>;
 	}>();
 
 	let title = $state('');
@@ -18,10 +18,10 @@
 	let dueDate = $state('');
 	let recurrence = $state<'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY'>('NONE');
 
-	function onSubmit(event: SubmitEvent) {
+	async function onSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		if (!title.trim()) return;
-		dispatch('create', {
+		await onCreate?.({
 			title: title.trim(),
 			description: description.trim() || null,
 			priority,

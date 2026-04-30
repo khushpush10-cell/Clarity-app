@@ -14,6 +14,15 @@ function isApiRequest(request: Request) {
 	return url.pathname.startsWith('/api/');
 }
 
+function isSupportedSameOriginRequest(request: Request) {
+	const url = new URL(request.url);
+	const selfOrigin = self.location.origin;
+	return (
+		(url.protocol === 'http:' || url.protocol === 'https:') &&
+		url.origin === selfOrigin
+	);
+}
+
 self.addEventListener('install', (event) => {
 	event.waitUntil(
 		caches.open(CACHE_VERSION).then((cache) => cache.addAll(APP_SHELL))
@@ -34,6 +43,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
 	if (event.request.method !== 'GET') return;
+	if (!isSupportedSameOriginRequest(event.request)) return;
 	if (isApiRequest(event.request)) return;
 
 	if (isStaticAsset(event.request)) {
