@@ -7,7 +7,7 @@
 			Task manager and routines
 		</h1>
 		<p class="mt-6 max-w-2xl text-lg text-text-secondary">
-			Desktop-first workspace for tasks, habits, goals, and team operations.
+			Desktop-first workspace for tasks, labels, routines, and weekly planning.
 		</p>
 		<div class="mt-10 flex gap-4">
 			<a

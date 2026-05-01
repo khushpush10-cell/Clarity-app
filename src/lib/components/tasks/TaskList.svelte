@@ -43,6 +43,7 @@
 	let selectedIds = $state([] as string[]);
 	let bulkLoading = $state(false);
 	let currentWorkspaceId = $state<string | null>(null);
+	let showCreate = $state(false);
 	const LOCAL_TASKS_KEY = 'clarity_local_tasks_v1';
 
 	const unsubscribe = tasks.subscribe((value) => {
@@ -118,9 +119,7 @@
 	onMount(() => {
 		loadLocalState();
 		void bootstrap();
-		document.addEventListener('clarity:complete-hotkey', completeFirstPending as EventListener);
 		return () => {
-			document.removeEventListener('clarity:complete-hotkey', completeFirstPending as EventListener);
 			unsubscribe();
 		};
 	});
@@ -203,8 +202,10 @@
 			upsertLocalTask(local);
 			tasks.setItems([local, ...items]);
 			tasks.setError('Saved locally. Connect database to sync with server.');
+			showCreate = false;
 			return;
 		}
+		showCreate = false;
 		await loadTasks();
 	}
 
@@ -342,12 +343,6 @@
 		bulkLoading = false; await loadTasks();
 	}
 
-	async function completeFirstPending() {
-		const target = items.find((candidate: TaskItem) => candidate.status !== 'DONE');
-		if (!target) return;
-		await completeTaskById(target.id);
-	}
-
 	async function duplicateTask(id: string) { await duplicateTaskById(id); }
 	async function duplicateTaskById(id: string) {
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${id}/duplicate`, { method: 'POST' });
@@ -389,7 +384,7 @@
 	}
 
 	async function editTask(payload: { id: string; title: string }) {
-		const nextTitle = payload.title.includes('(Copy)') ? payload.title : (prompt('Edit task title', payload.title) ?? payload.title).trim();
+		const nextTitle = payload.title.trim();
 		if (!nextTitle) return;
 		const result = await apiRequest<{ item?: TaskItem; error?: string }>(`/api/tasks/${payload.id}`, {
 			method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: nextTitle })
@@ -477,6 +472,7 @@
 	<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 		<h1 class="text-3xl font-semibold text-text-primary">Tasks</h1>
 		<div class="flex items-center gap-2">
+			<button class="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary" onclick={() => (showCreate = true)} type="button">New task</button>
 			<button class="rounded-full border border-border bg-surface-2 px-3 py-2 text-xs" onclick={saveTemplate} type="button">Save template</button>
 			<button class="rounded-full border border-border bg-surface-2 px-3 py-2 text-xs" onclick={saveFilterPreset} type="button">Save filter</button>
 		</div>
@@ -507,7 +503,9 @@
 		</div>
 	{/if}
 
-	<TaskForm onCreate={createTask} />
+	{#if showCreate}
+		<TaskForm onCreate={createTask} onCancel={() => (showCreate = false)} />
+	{/if}
 	<TaskFilters onSearch={onSearch} onStatus={onStatus} onPriority={onPriority} />
 
 	<div class="flex flex-wrap items-center gap-2">
@@ -536,7 +534,7 @@
 		<div class="empty-state">
 			<p class="text-sm">No tasks yet. Start with one clear action and build momentum.</p>
 			<div class="mt-3 flex flex-wrap gap-2">
-				<button class="rounded-full bg-primary px-3 py-1.5 text-xs text-on-primary" onclick={() => createFromTemplate('morning-routine')} type="button">Add your first task</button>
+				<button class="rounded-full bg-primary px-3 py-1.5 text-xs text-on-primary" onclick={() => (showCreate = true)} type="button">Add your first task</button>
 				<button class="rounded-full border border-border px-3 py-1.5 text-xs" onclick={saveTemplate} type="button">Use template</button>
 			</div>
 		</div>

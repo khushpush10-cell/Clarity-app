@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
 
 	import Header from '$lib/components/layout/Header.svelte';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
@@ -8,20 +7,6 @@
 	let { children } = $props();
 
 	let sidebarCollapsed = $state(false);
-
-	onMount(() => {
-		const onKeyDown = (event: KeyboardEvent) => {
-			const isTyping = ['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement)?.tagName);
-			if (isTyping) return;
-
-			if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-				document.dispatchEvent(new CustomEvent('clarity:complete-hotkey'));
-			}
-		};
-
-		window.addEventListener('keydown', onKeyDown);
-		return () => window.removeEventListener('keydown', onKeyDown);
-	});
 </script>
 
 <div class="flex min-h-screen bg-background">

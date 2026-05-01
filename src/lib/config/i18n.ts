@@ -8,7 +8,6 @@ export const i18n = {
 		tasks: 'nav.tasks',
 		habits: 'nav.habits',
 		calendar: 'nav.calendar',
-		team: 'nav.team',
 		goals: 'nav.goals',
 		analytics: 'nav.analytics',
 		settings: 'nav.settings'

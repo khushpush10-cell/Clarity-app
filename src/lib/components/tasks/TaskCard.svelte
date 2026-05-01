@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
 	import type { TaskItem } from '$lib/stores/tasks';
 
 	let { item, onComplete, onDelete, onDuplicate, onEdit } = $props<{
@@ -9,6 +9,8 @@
 		onEdit?: (payload: { id: string; title: string }) => void | Promise<void>;
 	}>();
 
+	let menuOpen = $state(false);
+
 	const priorityBadge: Record<TaskItem['priority'], string> = {
 		LOW: 'bg-surface-2 text-text-secondary',
 		MEDIUM: 'bg-secondary-tint text-secondary',
@@ -17,26 +19,27 @@
 	};
 
 	async function editTitle() {
+		menuOpen = false;
 		const nextTitle = prompt('Edit task title', item.title);
 		if (nextTitle && nextTitle.trim() && nextTitle.trim() !== item.title) {
 			await onEdit?.({ id: item.id, title: nextTitle.trim() });
 		}
 	}
 
-	async function onContextMenu(event: MouseEvent) {
-		event.preventDefault();
-		const action = prompt('Action: complete | duplicate | edit | delete', 'complete')?.trim().toLowerCase();
-		if (!action) return;
-		if (action === 'complete') await onComplete?.(item.id);
-		if (action === 'duplicate') await onDuplicate?.(item.id);
-		if (action === 'edit') await editTitle();
-		if (action === 'delete') await onDelete?.(item.id);
+	async function duplicateTask() {
+		menuOpen = false;
+		await onDuplicate?.(item.id);
+	}
+
+	async function deleteTask() {
+		menuOpen = false;
+		await onDelete?.(item.id);
 	}
 </script>
 
-<article class="app-card p-4" oncontextmenu={onContextMenu}>
+<article class="app-card p-4">
 	<div class="flex items-start justify-between gap-4">
-		<div>
+		<div class="min-w-0">
 			<a class="text-base font-semibold text-text-primary hover:text-primary" href={`/tasks/${item.id}`}>{item.title}</a>
 			{#if item.description}
 				<p class="mt-1 text-sm text-text-secondary">{item.description}</p>
@@ -50,13 +53,27 @@
 			</div>
 		</div>
 
-		<div class="flex flex-wrap justify-end gap-2">
-			<button class="rounded-full border border-border px-3 py-1.5 text-xs" onclick={editTitle} type="button">Edit</button>
-			<button class="rounded-full border border-border px-3 py-1.5 text-xs" onclick={() => onDuplicate?.(item.id)} type="button">Duplicate</button>
+		<div class="relative flex shrink-0 items-center gap-2">
 			{#if item.status !== 'DONE'}
 				<button class="rounded-full bg-primary px-3 py-1.5 text-xs text-on-primary" onclick={() => onComplete?.(item.id)} type="button">Complete</button>
 			{/if}
-			<button class="rounded-full bg-danger px-3 py-1.5 text-xs text-white" onclick={() => onDelete?.(item.id)} type="button">Delete</button>
+			<button
+				aria-expanded={menuOpen}
+				aria-haspopup="menu"
+				aria-label="Task actions"
+				class="rounded-full border border-border px-3 py-1.5 text-xs"
+				onclick={() => (menuOpen = !menuOpen)}
+				type="button"
+			>
+				...
+			</button>
+			{#if menuOpen}
+				<div class="absolute right-0 top-9 z-20 w-36 rounded-[14px] border border-border bg-surface p-1 shadow-lg" role="menu">
+					<button class="block w-full rounded-[10px] px-3 py-2 text-left text-xs hover:bg-surface-2" onclick={editTitle} type="button">Edit</button>
+					<button class="block w-full rounded-[10px] px-3 py-2 text-left text-xs hover:bg-surface-2" onclick={duplicateTask} type="button">Duplicate</button>
+					<button class="block w-full rounded-[10px] px-3 py-2 text-left text-xs text-warning hover:bg-warning-tint" onclick={deleteTask} type="button">Delete</button>
+				</div>
+			{/if}
 		</div>
 	</div>
 </article>

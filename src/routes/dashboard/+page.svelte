@@ -1,25 +1,61 @@
-<script lang="ts">
-import { goto } from '$app/navigation';
-import { onMount } from 'svelte';
+﻿<script lang="ts">
+	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 
-import DashboardLayout from '$lib/components/layout/DashboardLayout.svelte';
-	import type { HabitItem } from '$lib/stores/habits';
+	import DashboardLayout from '$lib/components/layout/DashboardLayout.svelte';
 	import type { TaskItem } from '$lib/stores/tasks';
 	import { apiRequest } from '$lib/utils/http';
 
 	const LOCAL_TASKS_KEY = 'clarity_local_tasks_v1';
-	const LOCAL_HABITS_KEY = 'clarity_local_habits_v1';
 
 	let loading = $state(false);
 	let error = $state<string | null>(null);
-	let fabOpen = $state(false);
+	let allTasks = $state([] as TaskItem[]);
 
-	let todayTasks = $state([] as TaskItem[]);
-	let habitSuggestion = $state<HabitItem | null>(null);
-	let focusSuggestionMinutes = $state(25);
+	const now = () => new Date();
+
+	function startOfWeek() {
+		const date = new Date();
+		const day = date.getDay();
+		const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+		date.setDate(diff);
+		date.setHours(0, 0, 0, 0);
+		return date;
+	}
+
+	let pendingTasks = $derived(allTasks.filter((task) => task.status !== 'DONE'));
+	let completedTasks = $derived(allTasks.filter((task) => task.status === 'DONE'));
+	let completedThisWeek = $derived(
+		completedTasks.filter((task) => task.completedAt && new Date(task.completedAt) >= startOfWeek())
+	);
+	let dueTodayTasks = $derived(
+		pendingTasks.filter((task) => {
+			if (!task.dueDate) return false;
+			const due = new Date(task.dueDate);
+			const today = now();
+			return due.toDateString() === today.toDateString();
+		})
+	);
+	let overdueTasks = $derived(pendingTasks.filter((task) => task.dueDate && new Date(task.dueDate) < now()));
+	let topTasks = $derived(
+		[...pendingTasks]
+			.sort((a, b) => {
+				const weights: Record<TaskItem['priority'], number> = { URGENT: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+				const priorityDiff = weights[b.priority] - weights[a.priority];
+				if (priorityDiff !== 0) return priorityDiff;
+				return (
+					(a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER) -
+					(b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER)
+				);
+			})
+			.slice(0, 3)
+	);
+	let completionRate = $derived(allTasks.length ? Math.round((completedTasks.length / allTasks.length) * 100) : 0);
+	let completionStyle = $derived(`width: ${completionRate}%`);
+	let nextAction = $derived(topTasks[0]?.title ?? 'Add one clear task to start your plan.');
 
 	onMount(() => {
-		void loadTodayPlan();
+		void loadDashboard();
 	});
 
 	function readLocalTasks(): TaskItem[] {
@@ -31,164 +67,107 @@ import DashboardLayout from '$lib/components/layout/DashboardLayout.svelte';
 		}
 	}
 
-	function readLocalHabits(): HabitItem[] {
-		try {
-			const raw = localStorage.getItem(LOCAL_HABITS_KEY);
-			return raw ? (JSON.parse(raw) as HabitItem[]) : [];
-		} catch {
-			return [];
-		}
-	}
-
-	function rankTask(task: TaskItem) {
-		const priorityWeight: Record<TaskItem['priority'], number> = {
-			URGENT: 4,
-			HIGH: 3,
-			MEDIUM: 2,
-			LOW: 1
-		};
-		const due = task.dueDate ? new Date(task.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
-		return priorityWeight[task.priority] * 10_000_000_000 - due;
-	}
-
-	function pickTopTasks(input: TaskItem[]) {
-		return input
-			.filter((task) => task.status !== 'DONE')
-			.sort((a, b) => rankTask(b) - rankTask(a))
-			.slice(0, 3);
-	}
-
-	async function loadTodayPlan() {
+	async function loadDashboard() {
 		loading = true;
 		error = null;
 		try {
-			const [tasksRes, habitsRes, focusRes] = await Promise.all([
-				apiRequest<{ items?: TaskItem[]; error?: string }>('/api/tasks?pageSize=100'),
-				apiRequest<{ items?: HabitItem[]; error?: string }>('/api/habits'),
-				apiRequest<{ averageMinutes?: number; error?: string }>('/api/focus-sessions/stats')
-			]);
-
-			const tasksPool = tasksRes.ok ? (tasksRes.data?.items ?? []) : readLocalTasks();
-			const habitsPool = habitsRes.ok ? (habitsRes.data?.items ?? []) : readLocalHabits();
-
-			todayTasks = pickTopTasks(tasksPool);
-			habitSuggestion = habitsPool[0] ?? null;
-			const average = focusRes.ok ? (focusRes.data?.averageMinutes ?? 25) : 25;
-			focusSuggestionMinutes = [15, 25, 30, 45, 60].find((value) => value >= average) ?? 60;
-
-			if (!tasksRes.ok || !habitsRes.ok) {
-				error = 'Using local data mode. Connect database to sync across devices.';
+			const result = await apiRequest<{ items?: TaskItem[]; error?: string }>('/api/tasks?pageSize=100');
+			if (!result.ok) {
+				allTasks = readLocalTasks();
+				error = 'Using local browser data. Database sync is not available for this session.';
+				return;
 			}
+			allTasks = result.data?.items ?? [];
 		} catch {
-			todayTasks = pickTopTasks(readLocalTasks());
-			habitSuggestion = readLocalHabits()[0] ?? null;
-			focusSuggestionMinutes = 25;
-			error = 'Using local data mode. Connect database to sync across devices.';
+			allTasks = readLocalTasks();
+			error = 'Using local browser data. Database sync is not available for this session.';
 		} finally {
 			loading = false;
 		}
-	}
-
-function startSuggestedFocus() {
-	fabOpen = false;
-	window.dispatchEvent(
-		new CustomEvent('clarity:focus-quick-start', {
-			detail: { minutes: focusSuggestionMinutes }
-		})
-	);
-	void goto('/tasks');
-}
-
-	async function goToTasks() {
-		fabOpen = false;
-		await goto('/tasks');
-	}
-
-	async function goToHabits() {
-		fabOpen = false;
-		await goto('/habits');
 	}
 </script>
 
 <DashboardLayout>
 	<section class="space-y-4 xl:col-span-12">
 		<section class="app-card p-5 md:p-6">
-			<h1 class="text-3xl font-semibold text-text-primary">Dashboard</h1>
-			<p class="mt-2 text-sm text-text-secondary">A calm overview for planning your day with steady momentum.</p>
-
-			{#if error}
-				<p class="mt-3 rounded-[14px] border border-warning bg-warning-tint px-3 py-2 text-sm text-warning">{error}</p>
-			{/if}
-
-			<div class="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-				<article class="muted-panel p-4">
-					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">Today plan</p>
-					{#if loading}
-						<p class="mt-2 text-sm text-text-secondary">Preparing your day...</p>
-					{:else if todayTasks.length === 0}
-						<p class="mt-2 text-sm text-text-secondary">No pending tasks. Add one priority action.</p>
-						<button class="mt-2 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-on-primary" onclick={goToTasks} type="button">Add a task</button>
-					{:else}
-						<ul class="mt-2 space-y-1 text-sm text-text-primary">
-							{#each todayTasks as task}
-								<li>- {task.title}</li>
-							{/each}
-						</ul>
-					{/if}
-				</article>
-				<article class="muted-panel p-4">
-					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">Habit suggestion</p>
-					{#if habitSuggestion}
-						<p class="mt-2 text-lg font-semibold text-text-primary">{habitSuggestion.name}</p>
-						<p class="mt-1 text-sm text-text-secondary">Current streak: {habitSuggestion.streakCurrent} days</p>
-					{:else}
-						<p class="mt-2 text-sm text-text-secondary">No habits added yet.</p>
-					{/if}
-					<button class="mt-2 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-text-primary" onclick={goToHabits} type="button">Open habits</button>
-				</article>
-				<article class="muted-panel p-4">
-					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">Focus suggestion</p>
-					<p class="mt-2 text-lg font-semibold text-text-primary">{focusSuggestionMinutes} minute session</p>
-					<p class="mt-1 text-sm text-text-secondary">Start one sprint to keep momentum steady.</p>
-					<button class="mt-2 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-on-primary" onclick={startSuggestedFocus} type="button">Start focus</button>
-				</article>
+			<div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+				<div>
+					<p class="text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary">This week</p>
+					<h1 class="mt-2 text-3xl font-semibold text-text-primary">Plan calmly. Finish clearly.</h1>
+					<p class="mt-2 text-sm text-text-secondary">A simple view of what needs attention now.</p>
+				</div>
+				<button class="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary" onclick={() => goto('/tasks')} type="button">New task</button>
 			</div>
 
-			<div class="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+			{#if error}
+				<p class="mt-4 rounded-[14px] border border-warning bg-warning-tint px-3 py-2 text-sm text-warning">{error}</p>
+			{/if}
+
+			<div class="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
 				<article class="muted-panel p-4">
-					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">This week</p>
-					<p class="mt-2 text-2xl font-semibold text-text-primary">{todayTasks.length}</p>
-					<p class="text-sm text-text-secondary">priority items in active plan</p>
+					<p class="text-xs uppercase tracking-[0.08em] text-text-secondary">Completed</p>
+					<p class="mt-2 text-3xl font-semibold text-text-primary">{completedThisWeek.length}</p>
+					<p class="text-sm text-text-secondary">finished this week</p>
 				</article>
 				<article class="muted-panel p-4">
-					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">Habit momentum</p>
-					<p class="mt-2 text-2xl font-semibold text-text-primary">{habitSuggestion?.streakCurrent ?? 0}</p>
-					<p class="text-sm text-text-secondary">current streak days</p>
+					<p class="text-xs uppercase tracking-[0.08em] text-text-secondary">Pending</p>
+					<p class="mt-2 text-3xl font-semibold text-text-primary">{pendingTasks.length}</p>
+					<p class="text-sm text-text-secondary">open tasks</p>
 				</article>
 				<article class="muted-panel p-4">
-					<p class="text-xs uppercase tracking-[0.05em] text-text-secondary">Next action</p>
-					<p class="mt-2 text-sm text-text-primary">
-						{#if todayTasks.length > 0}
-							Complete: {todayTasks[0]?.title}
-						{:else}
-							Add one task to start momentum
-						{/if}
-					</p>
+					<p class="text-xs uppercase tracking-[0.08em] text-text-secondary">Due today</p>
+					<p class="mt-2 text-3xl font-semibold text-text-primary">{dueTodayTasks.length}</p>
+					<p class="text-sm text-text-secondary">need attention</p>
+				</article>
+				<article class="muted-panel p-4">
+					<p class="text-xs uppercase tracking-[0.08em] text-text-secondary">Completion</p>
+					<p class="mt-2 text-3xl font-semibold text-text-primary">{completionRate}%</p>
+					<div class="mt-3 h-2 rounded-full bg-surface-2">
+						<div class="h-2 rounded-full bg-primary" style={completionStyle}></div>
+					</div>
 				</article>
 			</div>
 		</section>
+
+		<section class="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_0.8fr]">
+			<article class="app-card p-5">
+				<div class="flex items-center justify-between gap-3">
+					<h2 class="text-xl font-semibold text-text-primary">Today plan</h2>
+					<button class="rounded-full border border-border px-3 py-1.5 text-xs" onclick={() => goto('/tasks')} type="button">Open tasks</button>
+				</div>
+
+				{#if loading}
+					<p class="mt-4 text-sm text-text-secondary">Loading your plan...</p>
+				{:else if topTasks.length === 0}
+					<div class="empty-state mt-4">
+						<p>No tasks yet. Add your first task and keep the plan light.</p>
+						<button class="mt-3 rounded-full bg-primary px-3 py-1.5 text-xs text-on-primary" onclick={() => goto('/tasks')} type="button">Add task</button>
+					</div>
+				{:else}
+					<div class="mt-4 space-y-3">
+						{#each topTasks as task}
+							<div class="rounded-[14px] border border-border bg-surface-2 p-3">
+								<div class="flex items-center justify-between gap-3">
+									<p class="font-medium text-text-primary">{task.title}</p>
+									<span class="rounded-full bg-secondary-tint px-2 py-1 text-xs text-secondary">{task.priority}</span>
+								</div>
+								{#if task.description}
+									<p class="mt-1 text-sm text-text-secondary">{task.description}</p>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</article>
+
+			<article class="app-card p-5">
+				<h2 class="text-xl font-semibold text-text-primary">Next recommended action</h2>
+				<p class="mt-3 text-sm text-text-secondary">{nextAction}</p>
+				{#if overdueTasks.length > 0}
+					<p class="mt-4 rounded-[14px] bg-warning-tint px-3 py-2 text-sm text-warning">{overdueTasks.length} overdue task{overdueTasks.length === 1 ? '' : 's'} need a decision.</p>
+				{/if}
+				<button class="mt-4 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary" onclick={() => goto('/tasks')} type="button">Review tasks</button>
+			</article>
+		</section>
 	</section>
 </DashboardLayout>
-
-<div class="fixed bottom-20 right-4 z-30 lg:bottom-6 lg:right-6">
-	{#if fabOpen}
-		<div class="mb-2 space-y-2">
-			<button class="block w-full rounded-full bg-primary px-4 py-2 text-xs font-semibold text-on-primary shadow-sm" onclick={goToTasks} type="button">+ Task</button>
-			<button class="block w-full rounded-full border border-border bg-surface px-4 py-2 text-xs font-semibold text-text-primary shadow-sm" onclick={goToHabits} type="button">+ Habit</button>
-			<button class="block w-full rounded-full border border-border bg-surface px-4 py-2 text-xs font-semibold text-text-primary shadow-sm" onclick={startSuggestedFocus} type="button">+ Focus</button>
-		</div>
-	{/if}
-	<button class="rounded-full bg-primary px-4 py-3 text-sm font-semibold text-on-primary shadow-md" onclick={() => (fabOpen = !fabOpen)} type="button">
-		{fabOpen ? 'Close' : 'Quick Add'}
-	</button>
-</div>

@@ -8,9 +8,9 @@
 	let workspaces = $state([] as Array<{ id: string; name: string; type: string }>);
 	let selectedWorkspaceId = $state<string | null>(null);
 	let name = $state('');
-	let type = $state('TEAM');
+	let type = $state('PERSONAL');
 	let error = $state<string | null>(null);
-	const LOCAL_TEAM_KEY = 'clarity_local_team_v1';
+	const LOCAL_WORKSPACE_KEY = 'clarity_local_workspaces_v1';
 
 	onMount(() => {
 		void loadWorkspaces();
@@ -18,7 +18,7 @@
 
 	function readLocalWorkspaces() {
 		try {
-			const raw = localStorage.getItem(LOCAL_TEAM_KEY);
+			const raw = localStorage.getItem(LOCAL_WORKSPACE_KEY);
 			if (!raw) return [] as Array<{ id: string; name: string; type: string }>;
 			const parsed = JSON.parse(raw) as { workspaces?: Array<{ id: string; name: string; type: string }> };
 			return parsed.workspaces ?? [];
@@ -29,7 +29,7 @@
 
 	function writeLocalWorkspaces(next: Array<{ id: string; name: string; type: string }>) {
 		try {
-			const raw = localStorage.getItem(LOCAL_TEAM_KEY);
+			const raw = localStorage.getItem(LOCAL_WORKSPACE_KEY);
 			const parsed = raw
 				? (JSON.parse(raw) as {
 						workspaces?: Array<{ id: string; name: string; type: string }>;
@@ -37,14 +37,14 @@
 					})
 				: {};
 			localStorage.setItem(
-				LOCAL_TEAM_KEY,
+				LOCAL_WORKSPACE_KEY,
 				JSON.stringify({
 					...parsed,
 					workspaces: next
 				})
 			);
 		} catch {
-			localStorage.setItem(LOCAL_TEAM_KEY, JSON.stringify({ workspaces: next, membersByWorkspace: {} }));
+			localStorage.setItem(LOCAL_WORKSPACE_KEY, JSON.stringify({ workspaces: next, membersByWorkspace: {} }));
 		}
 	}
 
@@ -136,7 +136,7 @@
 	<section class="space-y-4">
 		<div>
 			<h1 class="text-[28px] font-semibold text-text-primary">Workspace Settings</h1>
-			<p class="text-sm text-text-secondary">Manage personal and team workspace identity.</p>
+			<p class="text-sm text-text-secondary">Manage your personal workspace identity.</p>
 		</div>
 
 		{#if error}
@@ -186,7 +186,7 @@
 						<div>
 							<label class="mb-1 block text-[13px] font-medium text-text-secondary" for="workspace-type">Type</label>
 							<select id="workspace-type" bind:value={type} class="w-full rounded-[12px] border border-border bg-surface-2 px-3 py-2 text-sm">
-								{#each ['PERSONAL', 'TEAM', 'BUSINESS'] as option}
+								{#each ['PERSONAL', 'BUSINESS'] as option}
 									<option value={option}>{option}</option>
 								{/each}
 							</select>

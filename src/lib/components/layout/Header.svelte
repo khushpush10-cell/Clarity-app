@@ -16,7 +16,7 @@
 	onMount(() => {
 		const localItems = readLocalNotifications();
 		if (localItems.length > 0) {
-		notifications = localItems;
+			notifications = localItems;
 			unread = localItems.filter((item) => !item.read).length;
 		}
 		void loadNotifications();
@@ -48,9 +48,9 @@
 					{
 						id: crypto.randomUUID(),
 						title: 'Welcome to Clarity',
-						message: 'Create your first task, habit, and goal to build momentum.',
+						message: 'Create your first task and organize it with labels when you are ready.',
 						read: false,
-						link: '/dashboard'
+						link: '/tasks'
 					}
 				];
 				notifications = seeded;
@@ -111,6 +111,18 @@
 		root.setAttribute('data-theme', next);
 		localStorage.setItem('clarity_theme', next);
 	}
+
+	let userOpen = $state(false);
+	const userName = $derived(page.data.user?.name ?? page.data.user?.email ?? 'Guest workspace');
+	const userEmail = $derived(page.data.user?.email ?? 'Local profile');
+	const initials = $derived(
+		userName
+			.split(/\s+/)
+			.map((part) => part[0])
+			.join('')
+			.slice(0, 2)
+			.toUpperCase() || 'C'
+	);
 </script>
 
 <header
@@ -121,7 +133,7 @@
 			bind:value={query}
 			aria-label="Global search"
 			class="w-full rounded-full border border-border bg-surface-2 px-4 py-2 text-sm outline-none"
-			placeholder="Search tasks, habits, goals..."
+			placeholder="Search tasks and labels..."
 			onkeydown={onSearchKeydown}
 			type="search"
 		/>
@@ -172,6 +184,33 @@
 			{/if}
 		</div>
 
-		<a class="hidden rounded-full border border-border px-3 py-1.5 text-text-primary md:inline" href="/settings">{page.data.user?.name ?? 'User'}</a>
+		<div class="relative">
+			<button
+				aria-expanded={userOpen}
+				aria-haspopup="menu"
+				class="flex items-center gap-2 rounded-full border border-border bg-surface-2 px-2 py-1 text-text-primary"
+				onclick={() => (userOpen = !userOpen)}
+				type="button"
+			>
+				<span class="grid h-8 w-8 place-items-center rounded-full bg-primary text-xs font-semibold text-on-primary">
+					{initials}
+				</span>
+				<span class="hidden max-w-32 truncate text-sm md:inline">{userName}</span>
+			</button>
+			{#if userOpen}
+				<div
+					class="absolute right-0 z-20 mt-2 w-64 rounded-[14px] border border-border bg-surface p-3 shadow-lg"
+					role="menu"
+				>
+					<p class="truncate text-sm font-semibold text-text-primary">{userName}</p>
+					<p class="truncate text-xs text-text-secondary">{userEmail}</p>
+					<div class="mt-3 space-y-1">
+						<a class="block rounded-[10px] px-3 py-2 text-sm hover:bg-surface-2" href="/settings" role="menuitem">Profile settings</a>
+						<a class="block rounded-[10px] px-3 py-2 text-sm hover:bg-surface-2" href="/settings?section=appearance" role="menuitem">Appearance</a>
+						<a class="block rounded-[10px] px-3 py-2 text-sm hover:bg-surface-2" href="/settings?section=data" role="menuitem">Data export</a>
+					</div>
+				</div>
+			{/if}
+		</div>
 	</div>
 </header>
