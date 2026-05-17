@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import type { TaskPriorityUi, TaskStatusUi } from '$lib/stores/tasks';
 
 	let { onSearch, onStatus, onPriority } = $props<{
@@ -26,8 +27,8 @@
 			<input id="task-search" bind:value={search} class="w-full rounded-[14px] border border-border bg-surface-2 px-3 py-2 text-sm" oninput={emitAll} placeholder="Search by title or notes" type="search" />
 		</div>
 		<div class="md:col-span-4 md:self-end md:text-right">
-			<button class="rounded-full border border-border bg-surface-2 px-3 py-2 text-xs font-medium text-text-primary" onclick={() => (showAdvanced = !showAdvanced)} type="button">
-				{showAdvanced ? 'Hide advanced filters' : 'Advanced filters'}
+			<button aria-label={showAdvanced ? 'Hide advanced filters' : 'Advanced filters'} class="inline-grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2 text-text-primary" onclick={() => (showAdvanced = !showAdvanced)} type="button">
+				<Icon name="filter" size={16} />
 			</button>
 		</div>
 	</div>

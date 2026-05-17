@@ -7,4 +7,5 @@ export const load: PageServerLoad = async ({ locals }) => {
 	if (shouldRequireAuth(locals.user)) {
 		throw redirect(302, '/auth/login');
 	}
+	throw redirect(302, '/tasks');
 };

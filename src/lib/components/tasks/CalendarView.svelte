@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import type { TaskItem } from '$lib/stores/tasks';
 
 	let {
@@ -195,10 +196,10 @@
 <div class="space-y-4">
 	<div class="app-card p-3 md:p-4">
 		<div class="flex flex-wrap items-center justify-between gap-3">
-			<div class="inline-flex rounded-full border border-border bg-surface p-1 text-sm">
+			<div class="inline-flex rounded-full border border-border bg-surface p-1 text-xs">
 				{#each ['day', 'week', 'month'] as option}
 					<button
-						class={`rounded-full px-3 py-1.5 ${mode === option ? 'bg-secondary-tint text-secondary' : 'text-text-secondary hover:bg-surface-2'}`}
+						class={`rounded-full px-2.5 py-1 font-medium ${mode === option ? 'bg-secondary-tint text-secondary' : 'text-text-secondary hover:bg-surface-2'}`}
 						onclick={() => (mode = option as CalendarMode)}
 						type="button"
 					>
@@ -208,15 +209,15 @@
 			</div>
 
 			<div class="flex items-center gap-2">
-				<button class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs" onclick={() => shiftCursor(-1)} type="button">Prev</button>
-				<button class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs" onclick={goToday} type="button">Today</button>
-				<button class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs" onclick={() => shiftCursor(1)} type="button">Next</button>
+				<button aria-label="Previous" class="grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2 text-text-primary" onclick={() => shiftCursor(-1)} type="button"><Icon name="chevron-left" size={16} /></button>
+				<button aria-label="Today" class="grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2 text-text-primary" onclick={goToday} type="button"><Icon name="home" size={16} /></button>
+				<button aria-label="Next" class="grid h-9 w-9 place-items-center rounded-full border border-border bg-surface-2 text-text-primary" onclick={() => shiftCursor(1)} type="button"><Icon name="chevron-right" size={16} /></button>
 			</div>
 		</div>
 
 		<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
 			<h3 class="text-lg font-semibold text-text-primary">{monthTitle}</h3>
-			<button class="rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-on-primary" onclick={() => createForDate(selectedDate)} type="button">Add task on selected date</button>
+			<button aria-label="Add task on selected date" class="grid h-9 w-9 place-items-center rounded-full bg-primary text-on-primary" onclick={() => createForDate(selectedDate)} type="button"><Icon name="plus" size={16} /></button>
 		</div>
 	</div>
 
@@ -287,7 +288,7 @@
 				{#if selectedTasks.length === 0}
 					<div class="empty-state">
 						<p class="text-sm">No tasks scheduled on this day.</p>
-						<button class="mt-2 rounded-full bg-primary px-3 py-1.5 text-xs text-on-primary" onclick={() => createForDate(selectedDate)} type="button">Add a task</button>
+						<button aria-label="Add a task" class="mt-2 grid h-9 w-9 place-items-center rounded-full bg-primary text-on-primary" onclick={() => createForDate(selectedDate)} type="button"><Icon name="plus" size={16} /></button>
 					</div>
 				{:else}
 					{#each selectedTasks as task (task.id)}
@@ -301,12 +302,12 @@
 							</div>
 							<div class="mt-3 flex flex-wrap gap-2">
 								{#if task.status !== 'DONE'}
-									<button class="rounded-full bg-primary px-2.5 py-1 text-xs text-on-primary" onclick={() => onComplete?.(task.id)} type="button">Complete</button>
+									<button aria-label="Complete task" class="grid h-8 w-8 place-items-center rounded-full bg-primary text-on-primary" onclick={() => onComplete?.(task.id)} type="button"><Icon name="check" size={14} /></button>
 								{/if}
-								<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => onEdit?.({ id: task.id, title: task.title })} type="button">Edit</button>
-								<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => onDuplicate?.(task.id)} type="button">Duplicate</button>
-								<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => unscheduleTask(task.id)} type="button">Unschedule</button>
-								<button class="rounded-full bg-danger px-2.5 py-1 text-xs text-white" onclick={() => onDelete?.(task.id)} type="button">Delete</button>
+								<button aria-label="Edit task" class="grid h-8 w-8 place-items-center rounded-full border border-border" onclick={() => onEdit?.({ id: task.id, title: task.title })} type="button"><Icon name="edit" size={14} /></button>
+								<button aria-label="Duplicate task" class="grid h-8 w-8 place-items-center rounded-full border border-border" onclick={() => onDuplicate?.(task.id)} type="button"><Icon name="copy" size={14} /></button>
+								<button aria-label="Unschedule task" class="grid h-8 w-8 place-items-center rounded-full border border-border" onclick={() => unscheduleTask(task.id)} type="button"><Icon name="undo" size={14} /></button>
+								<button aria-label="Delete task" class="grid h-8 w-8 place-items-center rounded-full bg-danger text-white" onclick={() => onDelete?.(task.id)} type="button"><Icon name="trash" size={14} /></button>
 							</div>
 						</article>
 					{/each}

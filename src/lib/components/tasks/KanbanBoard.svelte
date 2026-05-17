@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import type { TaskItem, TaskStatusUi } from '$lib/stores/tasks';
 
 	let { items = [], onMove, onComplete, onDelete, onDuplicate, onEdit } = $props<{
@@ -39,13 +40,13 @@
 					<article class="muted-panel cursor-grab p-3" draggable="true" ondragover={(event) => event.preventDefault()} ondrop={() => onDropCard(column.key, item.id)} ondragstart={() => onDragStart(item.id)}>
 						<p class="text-sm font-semibold text-text-primary">{item.title}</p>
 						{#if item.description}<p class="mt-1 text-xs text-text-secondary">{item.description}</p>{/if}
-						<div class="mt-2 flex flex-wrap gap-2">
+						<div class="mt-2 flex flex-wrap gap-1.5">
 							{#if item.status !== 'DONE'}
-								<button class="rounded-full bg-primary px-2.5 py-1 text-xs text-on-primary" onclick={() => onComplete?.(item.id)} type="button">Complete</button>
+								<button aria-label="Complete task" class="grid h-8 w-8 place-items-center rounded-full bg-primary text-on-primary" onclick={() => onComplete?.(item.id)} type="button"><Icon name="check" size={14} /></button>
 							{/if}
-							<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => onDuplicate?.(item.id)} type="button">Duplicate</button>
-							<button class="rounded-full border border-border px-2.5 py-1 text-xs" onclick={() => onEdit?.({ id: item.id, title: item.title })} type="button">Edit</button>
-							<button class="rounded-full bg-danger px-2.5 py-1 text-xs text-white" onclick={() => onDelete?.(item.id)} type="button">Delete</button>
+							<button aria-label="Duplicate task" class="grid h-8 w-8 place-items-center rounded-full border border-border" onclick={() => onDuplicate?.(item.id)} type="button"><Icon name="copy" size={14} /></button>
+							<button aria-label="Edit task" class="grid h-8 w-8 place-items-center rounded-full border border-border" onclick={() => onEdit?.({ id: item.id, title: item.title })} type="button"><Icon name="edit" size={14} /></button>
+							<button aria-label="Delete task" class="grid h-8 w-8 place-items-center rounded-full bg-danger text-white" onclick={() => onDelete?.(item.id)} type="button"><Icon name="trash" size={14} /></button>
 						</div>
 					</article>
 				{/each}

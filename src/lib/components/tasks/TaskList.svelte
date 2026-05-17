@@ -6,6 +6,7 @@
 	import TaskCard from '$lib/components/tasks/TaskCard.svelte';
 	import TaskFilters from '$lib/components/tasks/TaskFilters.svelte';
 	import TaskForm from '$lib/components/tasks/TaskForm.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import { notifications } from '$lib/stores/notifications';
 	import { tasks, type TaskItem, type TaskPriorityUi, type TaskStatusUi } from '$lib/stores/tasks';
 	import { apiRequest } from '$lib/utils/http';
@@ -62,6 +63,15 @@
 		{ key: 'calendar', label: 'Calendar' },
 		{ key: 'table', label: 'Table' }
 	];
+
+	const taskSummary = $derived.by(() => {
+		const lower = (item: TaskItem) => `${item.description ?? ''}`.toLowerCase();
+		return {
+			tasks: items.filter((item) => !lower(item).includes('type: habit') && !lower(item).includes('type: goal')).length,
+			habits: items.filter((item) => lower(item).includes('type: habit')).length,
+			goals: items.filter((item) => lower(item).includes('type: goal')).length
+		};
+	});
 
 	const defaultTemplates: TaskTemplate[] = [
 		{ id: 'morning-routine', title: 'Morning routine', description: 'Plan priorities, hydrate, review calendar', priority: 'MEDIUM' },
@@ -472,9 +482,24 @@
 	<div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
 		<h1 class="text-3xl font-semibold text-text-primary">Tasks</h1>
 		<div class="flex items-center gap-2">
-			<button class="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary" onclick={() => (showCreate = true)} type="button">New task</button>
-			<button class="rounded-full border border-border bg-surface-2 px-3 py-2 text-xs" onclick={saveTemplate} type="button">Save template</button>
-			<button class="rounded-full border border-border bg-surface-2 px-3 py-2 text-xs" onclick={saveFilterPreset} type="button">Save filter</button>
+			<button aria-label="New task" class="grid h-10 w-10 place-items-center rounded-full bg-primary text-on-primary" onclick={() => (showCreate = true)} type="button"><Icon name="plus" size={18} /></button>
+			<button aria-label="Save template" class="grid h-10 w-10 place-items-center rounded-full border border-border bg-surface-2 text-text-primary" onclick={saveTemplate} type="button"><Icon name="template" size={17} /></button>
+			<button aria-label="Save filter" class="grid h-10 w-10 place-items-center rounded-full border border-border bg-surface-2 text-text-primary" onclick={saveFilterPreset} type="button"><Icon name="filter" size={17} /></button>
+		</div>
+	</div>
+
+	<div class="grid grid-cols-3 gap-2">
+		<div class="muted-panel flex items-center gap-2 p-3">
+			<Icon name="tasks" size={16} />
+			<div><p class="text-xs text-text-secondary">Tasks</p><p class="text-sm font-semibold text-text-primary">{taskSummary.tasks}</p></div>
+		</div>
+		<div class="muted-panel flex items-center gap-2 p-3">
+			<Icon name="repeat" size={16} />
+			<div><p class="text-xs text-text-secondary">Habits</p><p class="text-sm font-semibold text-text-primary">{taskSummary.habits}</p></div>
+		</div>
+		<div class="muted-panel flex items-center gap-2 p-3">
+			<Icon name="target" size={16} />
+			<div><p class="text-xs text-text-secondary">Goals</p><p class="text-sm font-semibold text-text-primary">{taskSummary.goals}</p></div>
 		</div>
 	</div>
 
@@ -483,7 +508,7 @@
 			<p class="mb-2 text-xs font-semibold uppercase tracking-[0.06em] text-text-secondary">Task templates</p>
 			<div class="flex flex-wrap gap-2">
 				{#each templates as template (template.id)}
-					<button class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs" onclick={() => createFromTemplate(template.id)} type="button">{template.title}</button>
+					<button aria-label={`Create from ${template.title}`} class="rounded-full border border-border bg-surface-2 px-3 py-1.5 text-xs" onclick={() => createFromTemplate(template.id)} type="button">{template.title}</button>
 				{/each}
 			</div>
 		</div>
@@ -496,7 +521,7 @@
 				{#each presets as preset (preset.id)}
 					<div class="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-1">
 						<button class="text-xs" onclick={() => applyPreset(preset.id)} type="button">{preset.name}</button>
-						<button class="rounded-full px-1 text-xs text-warning" onclick={() => deletePreset(preset.id)} type="button">x</button>
+						<button aria-label="Delete saved filter" class="grid h-5 w-5 place-items-center rounded-full text-warning" onclick={() => deletePreset(preset.id)} type="button"><Icon name="x" size={12} /></button>
 					</div>
 				{/each}
 			</div>
@@ -511,15 +536,15 @@
 	<div class="flex flex-wrap items-center gap-2">
 		<div class="inline-flex rounded-full border border-border bg-surface p-1">
 			{#each views as item}
-				<button class={`rounded-full px-3 py-1.5 text-sm font-medium ${view === item.key ? 'bg-secondary-tint text-secondary' : 'text-text-secondary'}`} onclick={() => setView(item.key)} type="button">{item.label}</button>
+				<button class={`rounded-full px-2.5 py-1 text-xs font-medium ${view === item.key ? 'bg-secondary-tint text-secondary' : 'text-text-secondary'}`} onclick={() => setView(item.key)} type="button">{item.label}</button>
 			{/each}
 		</div>
 
 		{#if selectedIds.length > 0}
 			<div class="ml-auto flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1.5">
 				<span class="text-xs text-text-secondary">{selectedIds.length} selected</span>
-				<button class="rounded-full bg-primary px-2.5 py-1 text-xs text-on-primary disabled:opacity-50" disabled={bulkLoading} onclick={bulkCompleteSelected} type="button">Complete</button>
-				<button class="rounded-full bg-danger px-2.5 py-1 text-xs text-white disabled:opacity-50" disabled={bulkLoading} onclick={bulkDeleteSelected} type="button">Delete</button>
+				<button aria-label="Complete selected tasks" class="grid h-7 w-7 place-items-center rounded-full bg-primary text-on-primary disabled:opacity-50" disabled={bulkLoading} onclick={bulkCompleteSelected} type="button"><Icon name="check" size={14} /></button>
+				<button aria-label="Delete selected tasks" class="grid h-7 w-7 place-items-center rounded-full bg-danger text-white disabled:opacity-50" disabled={bulkLoading} onclick={bulkDeleteSelected} type="button"><Icon name="trash" size={14} /></button>
 			</div>
 		{/if}
 	</div>
@@ -534,8 +559,8 @@
 		<div class="empty-state">
 			<p class="text-sm">No tasks yet. Start with one clear action and build momentum.</p>
 			<div class="mt-3 flex flex-wrap gap-2">
-				<button class="rounded-full bg-primary px-3 py-1.5 text-xs text-on-primary" onclick={() => (showCreate = true)} type="button">Add your first task</button>
-				<button class="rounded-full border border-border px-3 py-1.5 text-xs" onclick={saveTemplate} type="button">Use template</button>
+				<button aria-label="Add your first task" class="grid h-9 w-9 place-items-center rounded-full bg-primary text-on-primary" onclick={() => (showCreate = true)} type="button"><Icon name="plus" size={16} /></button>
+				<button aria-label="Use template" class="grid h-9 w-9 place-items-center rounded-full border border-border" onclick={saveTemplate} type="button"><Icon name="template" size={16} /></button>
 			</div>
 		</div>
 	{:else if view === 'list'}
@@ -571,7 +596,7 @@
 								const value = (event.currentTarget as HTMLInputElement).value;
 								patchTask(item.id, { dueDate: value ? new Date(value + 'T00:00:00.000Z').toISOString() : null });
 							}} /></td>
-							<td class="px-3 py-2"><div class="flex flex-wrap gap-2">{#if item.status !== 'DONE'}<button class="rounded-full bg-primary px-2 py-1 text-xs text-on-primary" onclick={() => completeTaskById(item.id)} type="button">Complete</button>{/if}<button class="rounded-full border border-border px-2 py-1 text-xs" onclick={() => duplicateTaskById(item.id)} type="button">Duplicate</button><button class="rounded-full bg-danger px-2 py-1 text-xs text-white" onclick={() => deleteTaskById(item.id)} type="button">Delete</button></div></td>
+							<td class="px-3 py-2"><div class="flex flex-wrap gap-1.5">{#if item.status !== 'DONE'}<button aria-label="Complete task" class="grid h-8 w-8 place-items-center rounded-full bg-primary text-on-primary" onclick={() => completeTaskById(item.id)} type="button"><Icon name="check" size={14} /></button>{/if}<button aria-label="Duplicate task" class="grid h-8 w-8 place-items-center rounded-full border border-border" onclick={() => duplicateTaskById(item.id)} type="button"><Icon name="copy" size={14} /></button><button aria-label="Delete task" class="grid h-8 w-8 place-items-center rounded-full bg-danger text-white" onclick={() => deleteTaskById(item.id)} type="button"><Icon name="trash" size={14} /></button></div></td>
 						</tr>
 					{/each}
 				</tbody>

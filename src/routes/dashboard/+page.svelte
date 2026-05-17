@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 
 	import DashboardLayout from '$lib/components/layout/DashboardLayout.svelte';
+	import Icon from '$lib/components/ui/Icon.svelte';
 	import type { TaskItem } from '$lib/stores/tasks';
 	import { apiRequest } from '$lib/utils/http';
 
@@ -96,7 +97,7 @@
 					<h1 class="mt-2 text-3xl font-semibold text-text-primary">Plan calmly. Finish clearly.</h1>
 					<p class="mt-2 text-sm text-text-secondary">A simple view of what needs attention now.</p>
 				</div>
-				<button class="rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary" onclick={() => goto('/tasks')} type="button">New task</button>
+				<button aria-label="New task" class="grid h-10 w-10 place-items-center rounded-full bg-primary text-on-primary" onclick={() => goto('/tasks')} type="button"><Icon name="plus" size={18} /></button>
 			</div>
 
 			{#if error}
@@ -133,7 +134,7 @@
 			<article class="app-card p-5">
 				<div class="flex items-center justify-between gap-3">
 					<h2 class="text-xl font-semibold text-text-primary">Today plan</h2>
-					<button class="rounded-full border border-border px-3 py-1.5 text-xs" onclick={() => goto('/tasks')} type="button">Open tasks</button>
+					<button aria-label="Open tasks" class="grid h-9 w-9 place-items-center rounded-full border border-border text-text-primary" onclick={() => goto('/tasks')} type="button"><Icon name="tasks" size={16} /></button>
 				</div>
 
 				{#if loading}
@@ -141,7 +142,7 @@
 				{:else if topTasks.length === 0}
 					<div class="empty-state mt-4">
 						<p>No tasks yet. Add your first task and keep the plan light.</p>
-						<button class="mt-3 rounded-full bg-primary px-3 py-1.5 text-xs text-on-primary" onclick={() => goto('/tasks')} type="button">Add task</button>
+						<button aria-label="Add task" class="mt-3 grid h-9 w-9 place-items-center rounded-full bg-primary text-on-primary" onclick={() => goto('/tasks')} type="button"><Icon name="plus" size={16} /></button>
 					</div>
 				{:else}
 					<div class="mt-4 space-y-3">
@@ -166,7 +167,7 @@
 				{#if overdueTasks.length > 0}
 					<p class="mt-4 rounded-[14px] bg-warning-tint px-3 py-2 text-sm text-warning">{overdueTasks.length} overdue task{overdueTasks.length === 1 ? '' : 's'} need a decision.</p>
 				{/if}
-				<button class="mt-4 rounded-full bg-primary px-4 py-2 text-sm font-medium text-on-primary" onclick={() => goto('/tasks')} type="button">Review tasks</button>
+				<button aria-label="Review tasks" class="mt-4 grid h-10 w-10 place-items-center rounded-full bg-primary text-on-primary" onclick={() => goto('/tasks')} type="button"><Icon name="tasks" size={17} /></button>
 			</article>
 		</section>
 	</section>
